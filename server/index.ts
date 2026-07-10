@@ -13,7 +13,7 @@ await migrate()
 
 server.get('/api/health',async()=>({status:'ok',database:Boolean(process.env.DATABASE_URL),github:Boolean(process.env.GITHUB_APP_ID)}))
 server.get('/api/services',async()=>({services:(await listServices())||[]}))
-server.get('/api/github/status',async()=>({configured:Boolean(process.env.GITHUB_APP_ID&&process.env.GITHUB_PRIVATE_KEY),appId:process.env.GITHUB_APP_ID||null}))
+server.get('/api/github/status',async()=>({configured:Boolean(process.env.GITHUB_APP_ID&&(process.env.GITHUB_PRIVATE_KEY||process.env.GITHUB_PRIVATE_KEY_PATH)),appId:process.env.GITHUB_APP_ID||null}))
 server.get('/api/auth/login',async(_request,reply)=>beginLogin(reply))
 server.get<{Querystring:{code?:string;state?:string}}>('/api/auth/callback',finishLogin)
 server.get('/api/auth/me',async request=>({user:currentUser(request)}))
