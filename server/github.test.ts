@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest'
-import { metadataSchema, scoreMetadata } from './github.js'
+import { metadataSchema, scoreMetadata, teamSchema } from './github.js'
 
 const complete={
   apiVersion:'northstar.dev/v1',kind:'Service' as const,
@@ -16,4 +16,12 @@ describe('service metadata',()=>{
     const sparse=metadataSchema.parse({...complete,metadata:{...complete.metadata,description:''},spec:{owner:'team:checkout',lifecycle:'production'}})
     expect(scoreMetadata(sparse)).toBe(40)
   })
+})
+
+describe('team metadata',()=>{
+  it('accepts GitHub usernames as authoritative members',()=>{
+    const team=teamSchema.parse({apiVersion:'northstar.dev/v1',kind:'Team',metadata:{name:'platform',title:'Platform',description:'Owns the portal.'},spec:{members:['octocat']}})
+    expect(team.spec.members).toEqual(['octocat'])
+  })
+  it('rejects an empty team name',()=>expect(()=>teamSchema.parse({apiVersion:'northstar.dev/v1',kind:'Team',metadata:{name:'',title:'Platform'},spec:{members:[]}})).toThrow())
 })

@@ -17,6 +17,6 @@ describe('database schema',()=>{
     const db=newDb()
     const sql=await readFile(fileURLToPath(new URL('./schema.sql',import.meta.url)),'utf8')
     db.public.none(sql)
-    for(const table of ['teams','sync_runs','action_runs'])expect(db.public.getTable(table)).toBeTruthy()
+    for(const table of ['teams','users','team_members','sync_runs','action_runs'])expect(db.public.getTable(table)).toBeTruthy()
   })
 })
