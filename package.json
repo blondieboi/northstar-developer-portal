@@ -1,0 +1,40 @@
+{
+  "name": "northstar-developer-portal",
+  "private": true,
+  "version": "0.1.0",
+  "type": "module",
+  "scripts": {
+    "dev": "vite --host 0.0.0.0",
+    "dev:api": "tsx watch server/index.ts",
+    "build": "tsc -b && vite build",
+    "start": "tsx server/index.ts",
+    "preview": "vite preview --host 0.0.0.0",
+    "check": "tsc -b && tsc -p server/tsconfig.json --noEmit",
+    "test": "vitest run"
+  },
+  "dependencies": {
+    "@vitejs/plugin-react": "latest",
+    "vite": "latest",
+    "typescript": "latest",
+    "react": "latest",
+    "react-dom": "latest",
+    "lucide-react": "latest",
+    "fastify": "latest",
+    "@fastify/cors": "latest",
+    "@fastify/static": "latest",
+    "@octokit/app": "latest",
+    "@octokit/rest": "latest",
+    "pg": "latest",
+    "yaml": "latest",
+    "zod": "latest",
+    "tsx": "latest"
+  },
+  "devDependencies": {
+    "@types/react": "latest",
+    "@types/react-dom": "latest",
+    "@types/node": "latest",
+    "@types/pg": "latest",
+    "vitest": "latest",
+    "pg-mem": "latest"
+  }
+}

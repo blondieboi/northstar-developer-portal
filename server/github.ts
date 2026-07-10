@@ -1,0 +1,65 @@
+import { App } from '@octokit/app'
+import YAML from 'yaml'
+import { z } from 'zod'
+import { upsertService } from './db.js'
+
+export const metadataSchema = z.object({
+  apiVersion: z.string(),
+  kind: z.literal('Service'),
+  metadata: z.object({
+    name: z.string().min(1),
+    title: z.string().optional(),
+    description: z.string().default(''),
+    tags: z.array(z.string()).optional()
+  }),
+  spec: z.object({
+    owner: z.string().min(1),
+    lifecycle: z.enum(['production','experimental','deprecated']),
+    system: z.string().optional(),
+    language: z.string().optional(),
+    links: z.array(z.object({ name:z.string(), url:z.string().url() })).optional()
+  })
+})
+
+function app() {
+  const { GITHUB_APP_ID, GITHUB_PRIVATE_KEY, GITHUB_WEBHOOK_SECRET, GITHUB_CLIENT_ID, GITHUB_CLIENT_SECRET } = process.env
+  if (!GITHUB_APP_ID || !GITHUB_PRIVATE_KEY) throw new Error('GitHub App is not configured')
+  return new App({ appId:GITHUB_APP_ID, privateKey:GITHUB_PRIVATE_KEY.replace(/\\n/g,'\n'), webhooks:{secret:GITHUB_WEBHOOK_SECRET || 'development'}, oauth:GITHUB_CLIENT_ID&&GITHUB_CLIENT_SECRET?{clientId:GITHUB_CLIENT_ID,clientSecret:GITHUB_CLIENT_SECRET}:undefined })
+}
+
+export function scoreMetadata(value:z.infer<typeof metadataSchema>) {
+  const checks = [Boolean(value.spec.owner), Boolean(value.spec.lifecycle), value.metadata.description.length>=20, Boolean(value.spec.system), Boolean(value.spec.links?.some(l=>l.name.toLowerCase().includes('doc')))]
+  return Math.round(checks.filter(Boolean).length / checks.length * 100)
+}
+
+export async function syncInstallation(installationId:number) {
+  const octokit = await app().getInstallationOctokit(installationId)
+  const repositories: Array<{owner:{login:string};name:string;full_name:string;language?:string|null}>=[]
+  for(let page=1;;page++){
+    const response=await octokit.request('GET /installation/repositories',{per_page:100,page})
+    repositories.push(...response.data.repositories)
+    if(response.data.repositories.length<100)break
+  }
+  const results:{repository:string,status:string,error?:string}[]=[]
+  for (const repository of repositories) {
+    const repo = repository
+    try {
+      const contentResponse = await octokit.request('GET /repos/{owner}/{repo}/contents/{path}',{owner:repo.owner.login,repo:repo.name,path:'.portal/service.yaml'})
+      if (Array.isArray(contentResponse.data) || !('content' in contentResponse.data)) continue
+      const parsed = metadataSchema.parse(YAML.parse(Buffer.from(contentResponse.data.content,'base64').toString('utf8')))
+      await upsertService({name:parsed.metadata.name,description:parsed.metadata.description,owner:parsed.spec.owner.replace(/^team:/,''),system:parsed.spec.system||'Unassigned',lifecycle:parsed.spec.lifecycle,language:parsed.spec.language||repo.language||'Unknown',repository:repo.full_name,metadata:parsed,score:scoreMetadata(parsed),installationId})
+      results.push({repository:repo.full_name,status:'registered'})
+    } catch (error) {
+      const status = (error as {status?:number}).status===404?'unregistered':'invalid'
+      results.push({repository:repo.full_name,status,error:status==='invalid'?(error as Error).message:undefined})
+    }
+  }
+  return results
+}
+
+export async function dispatchWorkflow(installationId:number, repository:string, workflow:string, inputs:Record<string,string>) {
+  const [owner,repo]=repository.split('/')
+  if (!owner||!repo) throw new Error('Repository must use owner/name format')
+  const octokit=await app().getInstallationOctokit(installationId)
+  await octokit.request('POST /repos/{owner}/{repo}/actions/workflows/{workflow_id}/dispatches',{owner,repo,workflow_id:workflow,ref:'main',inputs})
+}
