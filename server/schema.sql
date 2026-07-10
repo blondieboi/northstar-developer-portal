@@ -18,7 +18,29 @@ create table if not exists teams (
   id bigserial primary key,
   name text not null unique,
   title text not null,
-  members jsonb not null default '[]'::jsonb
+  description text not null default '',
+  created_at timestamptz not null default now()
+);
+
+alter table teams add column if not exists description text not null default '';
+
+create table if not exists users (
+  id bigserial primary key,
+  github_id bigint unique,
+  login text not null unique,
+  name text not null,
+  avatar_url text not null default '',
+  email text,
+  bio text,
+  role text not null default 'member',
+  last_seen_at timestamptz not null default now(),
+  created_at timestamptz not null default now()
+);
+
+create table if not exists team_members (
+  team_id bigint not null references teams(id) on delete cascade,
+  user_id bigint not null references users(id) on delete cascade,
+  primary key (team_id, user_id)
 );
 
 create table if not exists sync_runs (

@@ -19,7 +19,7 @@ npm run build
 npm run preview
 ```
 
-Without a database or GitHub credentials the UI starts with representative demo data. Once the API is connected to PostgreSQL, synced catalog data replaces the demo catalog automatically.
+Northstar never substitutes demo entities for missing data. Without a database or synchronized GitHub metadata, each screen renders an explicit empty state with the next setup action.
 
 ## Self-hosted setup
 
@@ -49,6 +49,20 @@ spec:
       url: https://docs.example.com/checkout
 ```
 
+Team membership is read from `.portal/team.yaml` in an installed catalog repository:
+
+```yaml
+apiVersion: northstar.dev/v1
+kind: Team
+metadata:
+  name: platform
+  title: Platform
+  description: Owns shared developer experience tooling.
+spec:
+  members:
+    - github-username
+```
+
 ## Current scope
 
 - Responsive overview with catalog topology and health
@@ -56,10 +70,11 @@ spec:
 - Metadata standards and per-service scorecard coverage
 - GitHub App installation-token authentication
 - Repository discovery and `.portal/service.yaml` ingestion
+- Team and people directories from `.portal/team.yaml` and GitHub profiles
 - PostgreSQL catalog persistence
 - Metadata score evaluation during sync
 - GitHub Actions `workflow_dispatch` API
 - Self-service action catalog with dispatch feedback
 - Desktop and mobile navigation
 
-The remaining production-hardening work is the administrator setup UI, encrypted credential storage, OAuth user sessions, and access-control enforcement.
+GitHub OAuth sessions and administrator authorization are included. Production deployments should provide secrets through the infrastructure secret store rather than a local `.env` file.

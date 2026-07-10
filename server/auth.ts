@@ -1,5 +1,6 @@
 import { createHmac, randomBytes, timingSafeEqual } from 'node:crypto'
 import type { FastifyReply, FastifyRequest } from 'fastify'
+import { upsertUser } from './db.js'
 
 export type SessionUser={id:number;login:string;name:string;avatarUrl:string;role:'admin'|'member'}
 const secret=()=>process.env.SESSION_SECRET||process.env.GITHUB_CLIENT_SECRET||'northstar-development-only'
@@ -35,9 +36,10 @@ export async function finishLogin(request:FastifyRequest<{Querystring:{code?:str
   const token=await tokenResponse.json() as {access_token?:string;error_description?:string}
   if(!token.access_token)return reply.code(401).send({error:token.error_description||'GitHub authorization failed'})
   const userResponse=await fetch('https://api.github.com/user',{headers:{authorization:`Bearer ${token.access_token}`,accept:'application/vnd.github+json','user-agent':'northstar-portal'}})
-  const profile=await userResponse.json() as {id:number;login:string;name?:string|null;avatar_url:string}
+  const profile=await userResponse.json() as {id:number;login:string;name?:string|null;avatar_url:string;email?:string|null;bio?:string|null}
   const admins=(process.env.GITHUB_ADMIN_LOGINS||'').split(',').map(x=>x.trim().toLowerCase()).filter(Boolean)
   const user:SessionUser={id:profile.id,login:profile.login,name:profile.name||profile.login,avatarUrl:profile.avatar_url,role:admins.length===0||admins.includes(profile.login.toLowerCase())?'admin':'member'}
+  await upsertUser({githubId:profile.id,login:profile.login,name:user.name,avatarUrl:user.avatarUrl,email:profile.email,bio:profile.bio,role:user.role})
   reply.header('set-cookie',`northstar_session=${encode(user)}; ${cookieFlags()}`)
   return reply.redirect('/')
 }

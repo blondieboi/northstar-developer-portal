@@ -1,0 +1,9 @@
+apiVersion: northstar.dev/v1
+kind: Team
+metadata:
+  name: platform
+  title: Platform
+  description: Owns Northstar and the shared developer experience.
+spec:
+  members:
+    - blondieboi

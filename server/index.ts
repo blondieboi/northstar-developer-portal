@@ -3,7 +3,7 @@ import cors from '@fastify/cors'
 import staticFiles from '@fastify/static'
 import { existsSync } from 'node:fs'
 import { resolve } from 'node:path'
-import { migrate, listServices } from './db.js'
+import { catalogSummary, listServices, listTeams, listUsers, migrate, recordAction, upsertUser } from './db.js'
 import { dispatchWorkflow, syncInstallation } from './github.js'
 import { beginLogin, currentUser, finishLogin, logout, requireAdmin } from './auth.js'
 
@@ -13,10 +13,13 @@ await migrate()
 
 server.get('/api/health',async()=>({status:'ok',database:Boolean(process.env.DATABASE_URL),github:Boolean(process.env.GITHUB_APP_ID)}))
 server.get('/api/services',async()=>({services:(await listServices())||[]}))
+server.get('/api/teams',async()=>({teams:await listTeams()}))
+server.get('/api/users',async()=>({users:await listUsers()}))
+server.get('/api/summary',async()=>catalogSummary())
 server.get('/api/github/status',async()=>({configured:Boolean(process.env.GITHUB_APP_ID&&(process.env.GITHUB_PRIVATE_KEY||process.env.GITHUB_PRIVATE_KEY_PATH)),appId:process.env.GITHUB_APP_ID||null}))
 server.get('/api/auth/login',async(_request,reply)=>beginLogin(reply))
 server.get<{Querystring:{code?:string;state?:string}}>('/api/auth/callback',finishLogin)
-server.get('/api/auth/me',async request=>({user:currentUser(request)}))
+server.get('/api/auth/me',async request=>{const user=currentUser(request);if(user)await upsertUser({githubId:user.id,login:user.login,name:user.name,avatarUrl:user.avatarUrl,role:user.role});return{user}})
 server.post('/api/auth/logout',async(_request,reply)=>logout(reply))
 server.post<{Body:{installationId:number}}>('/api/github/sync',{preHandler:requireAdmin},async(request,reply)=>{
   if(!request.body?.installationId) return reply.code(400).send({error:'installationId is required'})
@@ -30,6 +33,7 @@ server.post<{Body:{installationId?:number;repository?:string;workflow?:string;in
   const workflow=request.body?.workflow||process.env.ACTION_WORKFLOW||'create-service.yaml'
   if(!installationId||!repository||!workflow) return reply.code(400).send({error:'installationId, repository, and workflow are required'})
   await dispatchWorkflow(installationId,repository,workflow,inputs)
+  await recordAction('create-service',repository,workflow,inputs)
   return reply.code(202).send({status:'dispatched'})
 })
 

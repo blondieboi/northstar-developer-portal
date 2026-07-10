@@ -2,7 +2,7 @@ import { App } from '@octokit/app'
 import { readFileSync } from 'node:fs'
 import YAML from 'yaml'
 import { z } from 'zod'
-import { upsertService } from './db.js'
+import { ensureTeam, recordSync, setTeamMembers, upsertService, upsertTeam, upsertUser } from './db.js'
 
 export const metadataSchema = z.object({
   apiVersion: z.string(),
@@ -20,6 +20,12 @@ export const metadataSchema = z.object({
     language: z.string().optional(),
     links: z.array(z.object({ name:z.string(), url:z.string().url() })).optional()
   })
+})
+
+export const teamSchema=z.object({
+  apiVersion:z.string(),kind:z.literal('Team'),
+  metadata:z.object({name:z.string().min(1),title:z.string().min(1),description:z.string().default('')}),
+  spec:z.object({members:z.array(z.string().min(1)).default([])})
 })
 
 function app() {
@@ -49,13 +55,31 @@ export async function syncInstallation(installationId:number) {
       const contentResponse = await octokit.request('GET /repos/{owner}/{repo}/contents/{path}',{owner:repo.owner.login,repo:repo.name,path:'.portal/service.yaml'})
       if (Array.isArray(contentResponse.data) || !('content' in contentResponse.data)) continue
       const parsed = metadataSchema.parse(YAML.parse(Buffer.from(contentResponse.data.content,'base64').toString('utf8')))
-      await upsertService({name:parsed.metadata.name,description:parsed.metadata.description,owner:parsed.spec.owner.replace(/^team:/,''),system:parsed.spec.system||'Unassigned',lifecycle:parsed.spec.lifecycle,language:parsed.spec.language||repo.language||'Unknown',repository:repo.full_name,metadata:parsed,score:scoreMetadata(parsed),installationId})
+      const owner=parsed.spec.owner.replace(/^team:/,'')
+      await ensureTeam(owner)
+      await upsertService({name:parsed.metadata.name,description:parsed.metadata.description,owner,system:parsed.spec.system||'Unassigned',lifecycle:parsed.spec.lifecycle,language:parsed.spec.language||repo.language||'Unknown',repository:repo.full_name,metadata:parsed,score:scoreMetadata(parsed),installationId})
       results.push({repository:repo.full_name,status:'registered'})
     } catch (error) {
       const status = (error as {status?:number}).status===404?'unregistered':'invalid'
       results.push({repository:repo.full_name,status,error:status==='invalid'?(error as Error).message:undefined})
     }
+    try{
+      const teamResponse=await octokit.request('GET /repos/{owner}/{repo}/contents/{path}',{owner:repo.owner.login,repo:repo.name,path:'.portal/team.yaml'})
+      if(!Array.isArray(teamResponse.data)&&'content' in teamResponse.data){
+        const teamData=teamSchema.parse(YAML.parse(Buffer.from(teamResponse.data.content,'base64').toString('utf8')))
+        const team=await upsertTeam({name:teamData.metadata.name,title:teamData.metadata.title,description:teamData.metadata.description})
+        const userIds=[]
+        for(const login of teamData.spec.members){
+          const response=await octokit.request('GET /users/{username}',{username:login})
+          const profile=response.data
+          const user=await upsertUser({githubId:profile.id,login:profile.login,name:profile.name||profile.login,avatarUrl:profile.avatar_url,email:profile.email,bio:profile.bio,role:'member'}) as {id?:string}
+          if(user?.id)userIds.push(user.id)
+        }
+        if(team?.id)await setTeamMembers(team.id,userIds)
+      }
+    }catch(error){if((error as {status?:number}).status!==404)results.push({repository:repo.full_name,status:'invalid',error:`team.yaml: ${(error as Error).message}`})}
   }
+  await recordSync(installationId,results)
   return results
 }
 
