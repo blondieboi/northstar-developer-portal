@@ -74,6 +74,7 @@ spec:
 - PostgreSQL catalog persistence
 - Metadata score evaluation during sync
 - GitHub Actions `workflow_dispatch` API
+- Safe bogus-provision workflow for end-to-end action testing
 - Self-service action catalog with dispatch feedback
 - Desktop and mobile navigation
 

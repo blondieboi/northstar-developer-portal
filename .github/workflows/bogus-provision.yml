@@ -1,0 +1,53 @@
+name: Bogus service provision
+
+on:
+  workflow_dispatch:
+    inputs:
+      serviceName:
+        description: Service name
+        required: true
+        type: string
+      owner:
+        description: Owning team, for example team:payments
+        required: true
+        type: string
+
+permissions:
+  contents: read
+
+jobs:
+  provision:
+    name: Simulate provisioning
+    runs-on: ubuntu-latest
+    steps:
+      - name: Validate request
+        env:
+          SERVICE_NAME: ${{ inputs.serviceName }}
+          SERVICE_OWNER: ${{ inputs.owner }}
+        run: |
+          [[ "$SERVICE_NAME" =~ ^[a-z0-9]+(-[a-z0-9]+)*$ ]] || { echo "Service name must be kebab-case"; exit 1; }
+          [[ "$SERVICE_OWNER" =~ ^team:[a-z0-9]+(-[a-z0-9]+)*$ ]] || { echo "Owner must use team:name format"; exit 1; }
+
+      - name: Simulate repository creation
+        run: echo "Would create repository for ${{ inputs.serviceName }}"
+
+      - name: Simulate CI and metadata setup
+        run: echo "Would configure CI, branch protection, and .portal/service.yaml"
+
+      - name: Publish simulation summary
+        env:
+          SERVICE_NAME: ${{ inputs.serviceName }}
+          SERVICE_OWNER: ${{ inputs.owner }}
+        run: |
+          {
+            echo "## Bogus provisioning completed"
+            echo
+            echo "No repositories or infrastructure were changed."
+            echo
+            echo "| Field | Value |"
+            echo "| --- | --- |"
+            echo "| Service | \`$SERVICE_NAME\` |"
+            echo "| Owner | \`$SERVICE_OWNER\` |"
+            echo "| Result | Simulation successful |"
+          } >> "$GITHUB_STEP_SUMMARY"
+
