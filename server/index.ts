@@ -30,10 +30,10 @@ server.post<{Body:{installationId?:number;repository?:string;workflow?:string;in
   const {inputs={}}=request.body||{}
   const installationId=request.body?.installationId||Number(process.env.GITHUB_INSTALLATION_ID)
   const repository=request.body?.repository||process.env.ACTION_REPOSITORY||''
-  const workflow=request.body?.workflow||process.env.ACTION_WORKFLOW||'create-service.yaml'
+  const workflow=request.body?.workflow||process.env.ACTION_WORKFLOW||'bogus-provision.yml'
   if(!installationId||!repository||!workflow) return reply.code(400).send({error:'installationId, repository, and workflow are required'})
   await dispatchWorkflow(installationId,repository,workflow,inputs)
-  await recordAction('create-service',repository,workflow,inputs)
+  await recordAction('bogus-provision',repository,workflow,inputs)
   return reply.code(202).send({status:'dispatched'})
 })
 
