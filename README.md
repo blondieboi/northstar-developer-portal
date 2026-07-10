@@ -23,7 +23,7 @@ Without a database or GitHub credentials the UI starts with representative demo 
 
 ## Self-hosted setup
 
-1. Start PostgreSQL with `docker compose up -d postgres`.
+1. Start PostgreSQL with `docker compose up -d postgres` (port `5440` by default).
 2. Copy `.env.example` to `.env` and configure `DATABASE_URL`.
 3. Create a GitHub App and add its App ID and private key to `.env`.
 4. Grant repository **Contents: read** and **Actions: write** permissions.

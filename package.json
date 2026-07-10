@@ -5,9 +5,9 @@
   "type": "module",
   "scripts": {
     "dev": "vite --host 0.0.0.0",
-    "dev:api": "tsx watch server/index.ts",
+    "dev:api": "node --env-file-if-exists=.env --import tsx --watch server/index.ts",
     "build": "tsc -b && vite build",
-    "start": "tsx server/index.ts",
+    "start": "node --env-file-if-exists=.env --import tsx server/index.ts",
     "preview": "vite preview --host 0.0.0.0",
     "check": "tsc -b && tsc -p server/tsconfig.json --noEmit",
     "test": "vitest run"

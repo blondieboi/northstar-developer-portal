@@ -26,9 +26,10 @@ export function beginLogin(reply:FastifyReply){
   return reply.redirect(`https://github.com/login/oauth/authorize?${params}`)
 }
 
-export async function finishLogin(request:FastifyRequest<{Querystring:{code?:string;state?:string}}>,reply:FastifyReply){
+export async function finishLogin(request:FastifyRequest<{Querystring:{code?:string;state?:string;installation_id?:string}}>,reply:FastifyReply){
   const saved=decode<{state:string;created:number}>(cookie(request,'northstar_oauth_state'))
-  const {code,state}=request.query
+  const {code,state,installation_id}=request.query
+  if(installation_id&&!saved)return reply.redirect('/api/auth/login')
   if(!code||!state||!saved||saved.state!==state||Date.now()-saved.created>600_000)return reply.code(400).send({error:'OAuth state is invalid or expired'})
   const tokenResponse=await fetch('https://github.com/login/oauth/access_token',{method:'POST',headers:{accept:'application/json','content-type':'application/json'},body:JSON.stringify({client_id:process.env.GITHUB_CLIENT_ID,client_secret:process.env.GITHUB_CLIENT_SECRET,code})})
   const token=await tokenResponse.json() as {access_token?:string;error_description?:string}

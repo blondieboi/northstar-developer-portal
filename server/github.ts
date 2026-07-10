@@ -1,4 +1,5 @@
 import { App } from '@octokit/app'
+import { readFileSync } from 'node:fs'
 import YAML from 'yaml'
 import { z } from 'zod'
 import { upsertService } from './db.js'
@@ -23,8 +24,9 @@ export const metadataSchema = z.object({
 
 function app() {
   const { GITHUB_APP_ID, GITHUB_PRIVATE_KEY, GITHUB_WEBHOOK_SECRET, GITHUB_CLIENT_ID, GITHUB_CLIENT_SECRET } = process.env
-  if (!GITHUB_APP_ID || !GITHUB_PRIVATE_KEY) throw new Error('GitHub App is not configured')
-  return new App({ appId:GITHUB_APP_ID, privateKey:GITHUB_PRIVATE_KEY.replace(/\\n/g,'\n'), webhooks:{secret:GITHUB_WEBHOOK_SECRET || 'development'}, oauth:GITHUB_CLIENT_ID&&GITHUB_CLIENT_SECRET?{clientId:GITHUB_CLIENT_ID,clientSecret:GITHUB_CLIENT_SECRET}:undefined })
+  const privateKey=GITHUB_PRIVATE_KEY||process.env.GITHUB_PRIVATE_KEY_PATH&&readFileSync(process.env.GITHUB_PRIVATE_KEY_PATH,'utf8')
+  if (!GITHUB_APP_ID || !privateKey) throw new Error('GitHub App is not configured')
+  return new App({ appId:GITHUB_APP_ID, privateKey:privateKey.replace(/\\n/g,'\n'), webhooks:{secret:GITHUB_WEBHOOK_SECRET || 'development'}, oauth:GITHUB_CLIENT_ID&&GITHUB_CLIENT_SECRET?{clientId:GITHUB_CLIENT_ID,clientSecret:GITHUB_CLIENT_SECRET}:undefined })
 }
 
 export function scoreMetadata(value:z.infer<typeof metadataSchema>) {
