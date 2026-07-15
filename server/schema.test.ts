@@ -21,5 +21,6 @@ describe('database schema',()=>{
     expect(Array.from(db.public.getTable('teams').getColumns()).some(column=>column.name==='links')).toBe(true)
     expect(Array.from(db.public.getTable('users').getColumns()).some(column=>column.name==='primary_team')).toBe(true)
     expect(Array.from(db.public.getTable('services').getColumns()).some(column=>column.name==='tier')).toBe(true)
+    expect(Array.from(db.public.getTable('services').getColumns()).some(column=>column.name==='service_type')).toBe(true)
   })
 })

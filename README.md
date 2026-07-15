@@ -65,6 +65,7 @@ spec:
   owner: team:checkout
   lifecycle: production
   tier: critical
+  type: backend
   system: commerce
   language: TypeScript
   links:

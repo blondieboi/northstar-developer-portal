@@ -16,6 +16,7 @@ scorecards:
       severity: recommended
       enabled: true
       tiers: [critical, high]
+      types: [backend, fullstack]
 ```
 
 ## Rule fields
@@ -32,6 +33,7 @@ scorecards:
 | `severity` | Yes | `required` or `recommended` |
 | `enabled` | Yes | Defaults to `true` |
 | `tiers` | No | Non-empty list of configured tier IDs; omission means all services |
+| `types` | No | Non-empty list of configured service type IDs; omission means all services |
 
 ## Operators
 
@@ -69,7 +71,7 @@ scorecards:
 
 Weights normalize across enabled rules. Disabling a rule removes its weight from both the numerator and denominator.
 
-## Tier-scoped checks
+## Scoped checks
 
 Add `tiers` when a check should apply only to particular service criticalities:
 
@@ -87,3 +89,20 @@ Add `tiers` when a check should apply only to particular service criticalities:
 ```
 
 Rules without `tiers` remain global, including for services that have not declared a tier. For each service, weights normalize only across applicable rules. Aggregate rule results use only eligible services as their denominator; a rule with no eligible services is shown as not applicable rather than failing.
+
+Add `types` to target architectural roles:
+
+```yaml
+- id: api-contract
+  title: API contract is linked
+  description: Server-side services publish an API contract
+  path: spec.links
+  operator: contains
+  value: api
+  types: [backend, fullstack]
+  weight: 1
+  severity: recommended
+  enabled: true
+```
+
+When a rule declares both `tiers` and `types`, the scopes intersect: a service must match one configured tier and one configured type. Omitting either field makes that dimension global. Weights normalize only across applicable rules, and aggregate pass rates count only eligible services.

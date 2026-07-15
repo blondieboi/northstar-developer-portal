@@ -4,14 +4,15 @@ import { calculateScore, evaluateRule, valueAt } from '../src/scorecards.js'
 
 const slug=z.string().regex(/^[a-z0-9]+(?:-[a-z0-9]+)*$/,'Must be a lowercase slug')
 export const tierSchema=z.object({id:slug,title:z.string().min(1),description:z.string().default('')}).strict()
-export const ruleSchema=z.object({id:z.string().min(1),title:z.string().min(1),description:z.string().default(''),path:z.string().min(1),operator:z.enum(['present','equals','oneOf','minLength','contains']),value:z.any().optional(),weight:z.number().positive().default(1),severity:z.enum(['required','recommended']).default('recommended'),enabled:z.boolean().default(true),tiers:z.array(slug).min(1).optional()}).strict()
+export const serviceTypeSchema=z.object({id:slug,title:z.string().min(1),description:z.string().default('')}).strict()
+export const ruleSchema=z.object({id:z.string().min(1),title:z.string().min(1),description:z.string().default(''),path:z.string().min(1),operator:z.enum(['present','equals','oneOf','minLength','contains']),value:z.any().optional(),weight:z.number().positive().default(1),severity:z.enum(['required','recommended']).default('recommended'),enabled:z.boolean().default(true),tiers:z.array(slug).min(1).optional(),types:z.array(slug).min(1).optional()}).strict()
 export const inputSchema=z.object({id:z.string().regex(/^[A-Za-z][A-Za-z0-9_-]*$/),label:z.string().min(1),type:z.enum(['text','multiline','number','boolean','select']),required:z.boolean().default(false),options:z.array(z.string()).optional(),placeholder:z.string().optional()}).strict().refine(x=>x.type!=='select'||Boolean(x.options?.length),{message:'Select inputs require options'})
 export const actionSchema=z.object({id:z.string().regex(/^[a-z0-9-]+$/),title:z.string().min(1),description:z.string().default(''),repository:z.string().regex(/^[^/\s]+\/[^/\s]+$/),workflow:z.string().min(1),confirmation:z.string().default('Run this action?'),enabled:z.boolean().default(true),published:z.boolean().default(false),inputs:z.array(inputSchema).default([]),version:z.number().int().positive().default(1)}).strict()
 export const toolDestinationSchema=z.object({label:z.string().min(1),url:z.string().url()}).strict()
 export const toolSchema=z.object({id:z.string().regex(/^[a-z0-9-]+$/),name:z.string().min(1),description:z.string().default(''),iconUrl:z.string().url().or(z.literal('')).default(''),destinations:z.array(toolDestinationSchema).min(1)}).strict()
 export const sectionSchemas={
   general:z.object({name:z.string().min(1),logoUrl:z.string().url().or(z.literal('')),accentColor:z.string().regex(/^#[0-9a-fA-F]{6}$/),supportUrl:z.string().url().or(z.literal('')),documentationUrl:z.string().url().or(z.literal(''))}).strict(),
-  catalog:z.object({serviceMetadataPath:z.string().min(1),teamMetadataPath:z.string().min(1),lifecycles:z.array(z.string().min(1)).min(1),tiers:z.array(tierSchema).default([]),installationId:z.number().int().positive().nullable()}).strict(),
+  catalog:z.object({serviceMetadataPath:z.string().min(1),teamMetadataPath:z.string().min(1),lifecycles:z.array(z.string().min(1)).min(1),tiers:z.array(tierSchema).default([]),types:z.array(serviceTypeSchema).default([]),installationId:z.number().int().positive().nullable()}).strict(),
   scorecards:z.object({rules:z.array(ruleSchema)}).strict(),
   actions:z.object({definitions:z.array(actionSchema)}).strict(),
   tools:z.object({items:z.array(toolSchema)}).strict(),
@@ -22,11 +23,17 @@ export const configSchema=baseConfigSchema.superRefine((config,context)=>{
   const tierIds=config.catalog.tiers.map(tier=>tier.id)
   const duplicateTier=tierIds.find((id,index)=>tierIds.indexOf(id)!==index)
   if(duplicateTier)context.addIssue({code:'custom',path:['catalog','tiers'],message:`Duplicate tier id: ${duplicateTier}`})
+  const typeIds=config.catalog.types.map(type=>type.id)
+  const duplicateType=typeIds.find((id,index)=>typeIds.indexOf(id)!==index)
+  if(duplicateType)context.addIssue({code:'custom',path:['catalog','types'],message:`Duplicate service type id: ${duplicateType}`})
   const ruleIds=config.scorecards.rules.map(rule=>rule.id)
   const duplicateRule=ruleIds.find((id,index)=>ruleIds.indexOf(id)!==index)
   if(duplicateRule)context.addIssue({code:'custom',path:['scorecards','rules'],message:`Duplicate rule id: ${duplicateRule}`})
   config.scorecards.rules.forEach((rule,index)=>rule.tiers?.forEach(tier=>{
     if(!tierIds.includes(tier))context.addIssue({code:'custom',path:['scorecards','rules',index,'tiers'],message:`Unknown tier: ${tier}`})
+  }))
+  config.scorecards.rules.forEach((rule,index)=>rule.types?.forEach(type=>{
+    if(!typeIds.includes(type))context.addIssue({code:'custom',path:['scorecards','rules',index,'types'],message:`Unknown service type: ${type}`})
   }))
 })
 export type PortalConfig=z.infer<typeof configSchema>
@@ -38,6 +45,12 @@ export const defaults:PortalConfig={apiVersion:'northstar.dev/v1',general:{name:
   {id:'high',title:'High',description:'Important services with significant operational impact'},
   {id:'standard',title:'Standard',description:'Normal production services'},
   {id:'low',title:'Low',description:'Low-impact or internal services'}
+],types:[
+  {id:'frontend',title:'Frontend',description:'User-facing web or mobile interface'},
+  {id:'backend',title:'Backend',description:'Server-side service or API'},
+  {id:'fullstack',title:'Fullstack',description:'Combined user interface and server-side application'},
+  {id:'pipeline',title:'Pipeline',description:'Data, delivery, or automation pipeline'},
+  {id:'configuration',title:'Configuration',description:'Configuration or policy repository'}
 ],installationId:null},scorecards:{rules:[
   {id:'owner',title:'Service has an owner',description:'Ownership is declared',path:'spec.owner',operator:'present',weight:1,severity:'required',enabled:true},
   {id:'lifecycle',title:'Lifecycle is declared',description:'Lifecycle is accepted',path:'spec.lifecycle',operator:'oneOf',value:['production','experimental','deprecated'],weight:1,severity:'required',enabled:true},

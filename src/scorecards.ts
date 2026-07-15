@@ -9,6 +9,7 @@ export type ScorecardRule = {
   severity: 'required' | 'recommended'
   enabled: boolean
   tiers?: string[]
+  types?: string[]
 }
 
 export function valueAt(value: unknown, path: string) {
@@ -21,8 +22,17 @@ export function serviceTier(metadata: unknown) {
   return typeof tier === 'string' && tier ? tier : null
 }
 
+export function serviceType(metadata: unknown) {
+  const type = valueAt(metadata, 'spec.type')
+  return typeof type === 'string' && type ? type : null
+}
+
 export function ruleApplies(metadata: unknown, rule: ScorecardRule) {
-  return !rule.tiers?.length || Boolean(serviceTier(metadata) && rule.tiers.includes(serviceTier(metadata)!))
+  const tier = serviceTier(metadata)
+  const type = serviceType(metadata)
+  const tierMatches = !rule.tiers?.length || Boolean(tier && rule.tiers.includes(tier))
+  const typeMatches = !rule.types?.length || Boolean(type && rule.types.includes(type))
+  return tierMatches && typeMatches
 }
 
 export function evaluateRule(metadata: unknown, rule: ScorecardRule) {

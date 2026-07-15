@@ -16,6 +16,7 @@ spec:
   owner: team:checkout
   lifecycle: production
   tier: critical
+  type: backend
   system: commerce
   language: TypeScript
   links:
@@ -27,7 +28,7 @@ Merge the file into a repository visible to the GitHub App. A push webhook that 
 
 ## Find a service
 
-Catalog search matches service name, owner, and system. Filter by tier to focus on a criticality class. Each row shows the configured tier and current metadata score. Select a row to open the complete service dossier.
+Catalog search matches service name, owner, and system. Filter by tier, service type, or both to focus on the relevant class. Each row shows the configured classification and current metadata score. Select a row to open the complete service dossier.
 
 ## Read a service dossier
 
@@ -37,7 +38,7 @@ The dossier groups information by purpose:
 - **Useful destinations** comes from `spec.links`.
 - **Signals** records the latest catalog and repository state available to Perongen.
 - **Stored metadata** shows the exact synchronized document.
-- **Ownership, source, and classification** identify the team, repository, lifecycle, and operational tier responsible for the service.
+- **Ownership, source, and classification** identify the team, repository, lifecycle, operational tier, and architectural type responsible for the service.
 
 ## Correct catalog data
 
