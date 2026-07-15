@@ -1,6 +1,6 @@
 # Portal configuration
 
-Canonical non-secret configuration consists of six strict YAML documents. Each document contains `apiVersion: northstar.dev/v1` and exactly one named section.
+Canonical non-secret configuration consists of seven strict YAML documents. Each document contains `apiVersion: northstar.dev/v1` and exactly one named section.
 
 Unknown properties fail validation. Use the files in `config.example/` as the maintained starting point.
 
@@ -88,7 +88,22 @@ A tool ID uses lowercase letters, digits, and hyphens. Every tool needs at least
 
 ## Scorecards and actions
 
-These sections contain arrays under `rules` and `definitions`. Use [Scorecard rules](/reference/scorecards) and [Workflow actions](/reference/actions) for their complete shapes.
+These sections contain arrays under `cards` and `definitions`. Use [Scorecard rules](/reference/scorecards) and [Workflow actions](/reference/actions) for their complete shapes.
+
+## Integrations
+
+```yaml
+apiVersion: northstar.dev/v1
+integrations:
+  plugins:
+    - id: github-actions
+      enabled: true
+      config:
+        lookbackDays: 30
+        maximumRuns: 20
+```
+
+Plugin IDs must be built into this Perongen release. Each plugin validates its own non-secret settings. Unknown plugins, duplicate IDs, and unknown settings fail validation. Credentials stay in deployment environment variables. A missing `integrations.yaml` is treated as an empty plugin list for compatibility and is created on the first integration save.
 
 ## Activation and recovery
 

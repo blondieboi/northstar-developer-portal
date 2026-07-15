@@ -53,6 +53,7 @@ export default defineConfig({
           { text: 'Connect GitHub', link: '/admin/github' },
           { text: 'Synchronize the catalog', link: '/admin/catalog' },
           { text: 'Control plane', link: '/admin/control-plane' },
+          { text: 'Integration plugins', link: '/admin/plugins' },
           { text: 'Access and audit', link: '/admin/access' },
         ],
       },

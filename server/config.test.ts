@@ -13,14 +13,14 @@ describe('portal configuration',()=>{
     expect(evaluateRule(metadata,{id:'c',title:'Docs',description:'',path:'spec.links',operator:'contains',value:'documentation',weight:1,severity:'recommended',enabled:true})).toBe(true)
   })
   it('returns a complete score when no rules are enabled',()=>{
-    const old=defaults.scorecards.rules.map(r=>r.enabled);defaults.scorecards.rules.forEach(r=>r.enabled=false)
-    expect(scoreWithConfig({})).toBe(100);defaults.scorecards.rules.forEach((r,i)=>r.enabled=old[i])
+    const rules=defaults.scorecards.cards[0].rules;const old=rules.map(r=>r.enabled);rules.forEach(r=>r.enabled=false)
+    expect(scoreWithConfig({})).toBe(100);rules.forEach((r,i)=>r.enabled=old[i])
   })
   it('scopes weighted rules to configured service tiers and types',()=>{
-    const scoped={...defaults,scorecards:{rules:[
+    const scoped={...defaults,scorecards:{cards:[{...defaults.scorecards.cards[0],rules:[
       {id:'owner',title:'Owner',description:'',path:'spec.owner',operator:'present' as const,weight:1,severity:'required' as const,enabled:true},
       {id:'runbook',title:'Runbook',description:'',path:'spec.runbook',operator:'present' as const,weight:1,severity:'required' as const,enabled:true,tiers:['critical'],types:['backend']}
-    ]}}
+    ]}]}}
     activateConfig(scoped)
     expect(scoreWithConfig({spec:{owner:'team:platform',tier:'critical',type:'backend'}})).toBe(50)
     expect(scoreWithConfig({spec:{owner:'team:platform',tier:'critical',type:'frontend'}})).toBe(100)
@@ -29,18 +29,41 @@ describe('portal configuration',()=>{
   })
   it('rejects duplicate tiers and unknown scorecard tier scopes',()=>{
     expect(()=>validateConfig({...defaults,catalog:{...defaults.catalog,tiers:[defaults.catalog.tiers[0],defaults.catalog.tiers[0]]}})).toThrow('Duplicate tier id')
-    expect(()=>validateConfig({...defaults,scorecards:{rules:[{...defaults.scorecards.rules[0],tiers:['urgent']}]}})).toThrow('Unknown tier')
+    expect(()=>validateConfig({...defaults,scorecards:{cards:[{...defaults.scorecards.cards[0],rules:[{...defaults.scorecards.cards[0].rules[0],tiers:['urgent']}]}]}})).toThrow('Unknown tier')
   })
   it('rejects duplicate service types and unknown scorecard type scopes',()=>{
     expect(()=>validateConfig({...defaults,catalog:{...defaults.catalog,types:[defaults.catalog.types[0],defaults.catalog.types[0]]}})).toThrow('Duplicate service type id')
-    expect(()=>validateConfig({...defaults,scorecards:{rules:[{...defaults.scorecards.rules[0],types:['worker']}]}})).toThrow('Unknown service type')
+    expect(()=>validateConfig({...defaults,scorecards:{cards:[{...defaults.scorecards.cards[0],rules:[{...defaults.scorecards.cards[0].rules[0],types:['worker']}]}]}})).toThrow('Unknown service type')
+  })
+  it('migrates a legacy rules document into a primary scorecard',()=>{
+    const legacy={rules:[defaults.scorecards.cards[0].rules[0]]}
+    const parsed=validateSection('scorecards',legacy) as typeof defaults.scorecards
+    expect(parsed.cards[0]).toMatchObject({id:'metadata-quality',primary:true})
+  })
+  it('loads cached configurations created before integrations existed',()=>{
+    const legacy={...defaults} as any;delete legacy.integrations
+    expect(validateConfig(legacy).integrations).toEqual({plugins:[]})
+  })
+  it('validates plugin configuration and plugin-backed scorecard sources',()=>{
+    const configured={...defaults,integrations:{plugins:[{id:'github-actions',enabled:true,config:{lookbackDays:14,maximumRuns:10}}]}}
+    expect(validateConfig(configured).integrations.plugins[0].id).toBe('github-actions')
+    expect(()=>validateConfig({...configured,integrations:{plugins:[{id:'unknown',enabled:true,config:{}}]}})).toThrow('Unknown plugin')
+    expect(()=>validateConfig({...configured,integrations:{plugins:[{id:'github-actions',enabled:true,config:{lookbackDays:0,maximumRuns:10}}]}})).toThrow()
+    expect(()=>validateConfig({...configured,scorecards:{cards:[{...defaults.scorecards.cards[0],rules:[{...defaults.scorecards.cards[0].rules[0],source:{kind:'plugin',plugin:'unknown'}}]}]}})).toThrow('Unknown plugin')
+  })
+  it('requires one primary card and unique scorecard ids',()=>{
+    const second={...defaults.scorecards.cards[0],id:'delivery',title:'Delivery',primary:false,rules:[]}
+    expect(validateConfig({...defaults,scorecards:{cards:[defaults.scorecards.cards[0],second]}}).scorecards.cards).toHaveLength(2)
+    expect(()=>validateConfig({...defaults,scorecards:{cards:[{...defaults.scorecards.cards[0],primary:false},second]}})).toThrow('Exactly one scorecard')
+    expect(()=>validateConfig({...defaults,scorecards:{cards:[{...defaults.scorecards.cards[0],enabled:false}]}})).toThrow('primary scorecard must be enabled')
+    expect(()=>validateConfig({...defaults,scorecards:{cards:[defaults.scorecards.cards[0],{...second,id:defaults.scorecards.cards[0].id}]}})).toThrow('Duplicate scorecard')
   })
   it('loads older catalog documents without classification fields',()=>{
     const legacy={...defaults.catalog} as any;delete legacy.tiers;delete legacy.types
     expect((validateSection('catalog',legacy) as typeof defaults.catalog).tiers).toEqual([])
     expect((validateSection('catalog',legacy) as typeof defaults.catalog).types).toEqual([])
   })
-  it('round-trips all six strict section documents',()=>{
+  it('round-trips all seven strict section documents',()=>{
     const documents=Object.fromEntries(configSections.map(section=>[section,serializeSection(section,defaults[section])])) as any
     expect(parseConfigDocuments(documents)).toEqual(defaults)
     documents.general+='unexpected: true\n'

@@ -40,7 +40,13 @@ catalog:
       description: Configuration or policy repository
   installationId: null
 scorecards:
-  rules: []
+  cards:
+    - id: metadata-quality
+      title: Metadata quality
+      description: Catalog metadata completeness and standards
+      enabled: true
+      primary: true
+      rules: []
 actions:
   definitions: []
 tools:
@@ -52,5 +58,12 @@ tools:
       destinations:
         - label: Open GitHub
           url: https://github.com
+integrations:
+  plugins:
+    - id: github-actions
+      enabled: true
+      config:
+        lookbackDays: 30
+        maximumRuns: 20
 access:
   admins: [your-github-login]

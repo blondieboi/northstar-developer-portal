@@ -30,7 +30,7 @@ For each valid service it stores the metadata, source repository, ownership, lif
 
 After initial setup, a signed push delivery triggers repository-level synchronization only when a commit adds, modifies, or removes a configured metadata path. This avoids rescanning the installation for unrelated source changes.
 
-Configuration repository pushes use a separate path: Perongen loads all six documents at one Git revision and activates them together only after complete validation.
+Configuration repository pushes use a separate path: Perongen loads all seven documents at one Git revision and activates them together only after complete validation. A legacy repository may omit `integrations.yaml` until its first integration save.
 
 ## Interpret results
 

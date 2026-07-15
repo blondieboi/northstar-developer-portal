@@ -1,30 +1,54 @@
 apiVersion: northstar.dev/v1
 scorecards:
-  rules:
-    - id: tier
-      title: Service tier is declared
-      description: Operational criticality is explicit
-      path: spec.tier
-      operator: present
-      weight: 1
-      severity: required
+  cards:
+    - id: metadata-quality
+      title: Metadata quality
+      description: Catalog metadata completeness and standards
       enabled: true
-    - id: type
-      title: Service type is declared
-      description: Architectural role is explicit
-      path: spec.type
-      operator: present
-      weight: 1
-      severity: required
+      primary: true
+      rules:
+        - id: tier
+          title: Service tier is declared
+          description: Operational criticality is explicit
+          path: spec.tier
+          operator: present
+          weight: 1
+          severity: required
+          enabled: true
+        - id: type
+          title: Service type is declared
+          description: Architectural role is explicit
+          path: spec.type
+          operator: present
+          weight: 1
+          severity: required
+          enabled: true
+        - id: critical-docs
+          title: Critical services have documentation
+          description: Documentation is required for higher-impact services
+          path: spec.links
+          operator: contains
+          value: documentation
+          weight: 2
+          severity: required
+          enabled: true
+          tiers: [critical, high]
+          types: [backend, fullstack]
+    - id: delivery-health
+      title: Delivery health
+      description: Signals collected from delivery plugins
       enabled: true
-    - id: critical-docs
-      title: Critical services have documentation
-      description: Documentation is required for higher-impact services
-      path: spec.links
-      operator: contains
-      value: documentation
-      weight: 2
-      severity: required
-      enabled: true
-      tiers: [critical, high]
-      types: [backend, fullstack]
+      primary: false
+      rules:
+        - id: latest-action-succeeded
+          title: Latest workflow run succeeded
+          description: The most recent GitHub Actions run completed successfully
+          source:
+            kind: plugin
+            plugin: github-actions
+          path: runs.0.conclusion
+          operator: equals
+          value: success
+          weight: 1
+          severity: recommended
+          enabled: true

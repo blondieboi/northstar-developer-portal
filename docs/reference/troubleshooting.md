@@ -25,13 +25,17 @@ The callback configured in GitHub must exactly equal `${PUBLIC_URL}/api/auth/cal
 
 - Ensure the GitHub App and `GITHUB_WEBHOOK_SECRET` use the identical secret.
 - Confirm the public webhook URL is `${PUBLIC_URL}/api/github/webhook`.
-- Subscribe to Push events.
+- Subscribe to Push and Workflow run events.
 - Use public HTTPS; GitHub cannot reach localhost.
 - Check the delivery ledger for duplicate, ignored, or signature-failure messages.
 
 ## Configuration is stale
 
-Confirm the configuration repository, branch, directory, and installation ID. Check that all six YAML files exist and validate at the same revision. Use the control plane's refresh action or wait for the configured recovery poll.
+Confirm the configuration repository, branch, directory, and installation ID. Check that the six original YAML files and, for plugin configuration, `integrations.yaml` validate at the same revision. Older installations may omit only `integrations.yaml`. Use the control plane's refresh action or wait for the configured recovery poll.
+
+## GitHub Actions plugin is degraded
+
+Confirm the plugin is enabled under **Settings → Integrations**, the GitHub App is installed on the service repository, Actions permission is granted, and the service has a stored installation ID. Use **Refresh data** to retry immediately. A provider failure does not fail catalog synchronization; the latest error remains visible in plugin health.
 
 Perongen continues serving its last-known-good revision during GitHub failures. This is expected; writes stay disabled until synchronization succeeds.
 

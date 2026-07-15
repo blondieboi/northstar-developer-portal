@@ -34,7 +34,8 @@ Catalog search matches service name, owner, and system. Filter by tier, service 
 
 The dossier groups information by purpose:
 
-- **Standards** shows each active metadata check and whether it passes.
+- **Standards** shows every scorecard result and the primary card's applicable checks.
+- **Plugin sections** such as GitHub Actions show normalized operational signals collected for the service repository.
 - **Useful destinations** comes from `spec.links`.
 - **Signals** records the latest catalog and repository state available to Perongen.
 - **Stored metadata** shows the exact synchronized document.

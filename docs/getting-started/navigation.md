@@ -8,12 +8,12 @@ Perongen uses one stable navigation model on desktop and mobile. The available d
 | --- | --- |
 | Overview | See active-team responsibility, standards coverage, and recent changes |
 | Catalog | Search and inspect registered services |
-| Scorecards | Compare metadata standards across the catalog |
+| Scorecards | Choose a named standards view and compare metadata or plugin-backed checks |
 | Actions | Run published GitHub workflows and inspect dispatch history |
 | Tools | Open shared engineering systems |
 | Teams | Browse ownership groups and their services |
 | People | Find GitHub identities and team memberships |
-| Settings | Administer the portal; visible only to administrators |
+| Settings | Administer the portal, including integration plugins; visible only to administrators |
 
 ## Team context
 

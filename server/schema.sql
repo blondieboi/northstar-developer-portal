@@ -12,6 +12,7 @@ create table if not exists services (
   metadata_path text not null default '.portal/service.yaml',
   metadata jsonb not null default '{}'::jsonb,
   score integer not null default 0,
+  scorecards jsonb not null default '{}'::jsonb,
   installation_id bigint,
   updated_at timestamptz not null default now()
 );
@@ -22,6 +23,19 @@ where tier is null and metadata -> 'spec' ->> 'tier' is not null and metadata ->
 alter table services add column if not exists service_type text;
 update services set service_type=metadata -> 'spec' ->> 'type'
 where service_type is null and metadata -> 'spec' ->> 'type' is not null and metadata -> 'spec' ->> 'type' <> '';
+alter table services add column if not exists scorecards jsonb not null default '{}'::jsonb;
+
+create table if not exists plugin_snapshots (
+  plugin_id text not null,
+  entity_kind text not null,
+  entity_key text not null,
+  status text not null,
+  data jsonb,
+  error text,
+  observed_at timestamptz not null default now(),
+  expires_at timestamptz,
+  primary key (plugin_id, entity_kind, entity_key)
+);
 
 create table if not exists teams (
   id bigserial primary key,
