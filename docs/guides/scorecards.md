@@ -1,10 +1,10 @@
 # Scorecards
 
-Scorecards turn metadata expectations into visible, weighted checks. They help teams improve catalog quality without implying application uptime or production readiness.
+Scorecards turn metadata and plugin signals into visible, weighted checks. Administrators can create multiple named scorecards for concerns such as metadata quality, delivery health, or security posture. One primary scorecard supplies the catalog-wide coverage value.
 
 ## Read coverage
 
-Open **Scorecards** to compare the current service scores. A service dossier shows the same evaluation at service level, including the field and condition behind each result.
+Open **Scorecards** and select a card to compare current service scores. A service dossier shows every enabled card's score and expands the primary card's checks.
 
 The score is calculated as:
 
@@ -14,13 +14,13 @@ weight of passing applicable rules ÷ weight of all applicable rules × 100
 
 If there are no enabled rules, the service score is 100.
 
-Rules may target configured service tiers, service types, or both. A critical backend runbook check, for example, is excluded from lower-tier services and non-backend types. When both dimensions are selected, a service must match both. The Scorecards page shows each rule's scope and counts only eligible services in its pass rate.
+Rules may target configured service tiers, service types, or both. They may read synchronized service metadata or normalized facts from an enabled plugin. A missing plugin snapshot makes its rules not applicable. The Scorecards page shows source and scope and counts only eligible services in each pass rate.
 
 ## Required and recommended rules
 
 Severity communicates organizational intent. Both `required` and `recommended` rules contribute according to their weight; severity does not change the calculation by itself.
 
-Administrators can add, edit, disable, preview, and scope rules in **Settings → Scorecards**. Service types themselves are managed under **Settings → Catalog**. Changes apply immediately after saving and are recorded in the audit ledger.
+Administrators can create cards, choose the primary card, add, edit, disable, preview, source, and scope rules in **Settings → Scorecards**. Plugin providers are managed under **Settings → Integrations**. Changes apply immediately after saving and are recorded in the audit ledger.
 
 ## Improve a service score
 

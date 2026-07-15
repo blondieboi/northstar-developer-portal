@@ -22,7 +22,7 @@ The default connection uses port `5440`. Production deployments should provide a
 
 ## Prepare canonical configuration
 
-Copy all six files from `config.example/` into one directory in a GitHub repository:
+Copy all seven files from `config.example/` into one directory in a GitHub repository:
 
 ```text
 perongen/
@@ -30,6 +30,7 @@ perongen/
 ├── actions.yaml
 ├── catalog.yaml
 ├── general.yaml
+├── integrations.yaml
 ├── scorecards.yaml
 └── tools.yaml
 ```
@@ -89,4 +90,4 @@ Export existing file/database-backed configuration before enabling Git-backed va
 npm run config:export -- --output ./perongen-config
 ```
 
-The exporter validates all six documents and includes current database administrators. It refuses to overwrite output unless `--force` is supplied. Review and commit the result before pointing production at it.
+The exporter validates all seven documents and includes current database administrators. It refuses to overwrite output unless `--force` is supplied. Review and commit the result before pointing production at it. Existing Git-backed installations may add `integrations.yaml` later; Perongen supplies an empty in-memory section until its first UI save.

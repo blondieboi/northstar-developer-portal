@@ -1,32 +1,52 @@
-# Scorecard rules
+# Scorecards
 
-Scorecard configuration contains a strict array of weighted rules:
+Scorecard configuration contains one or more named cards. Exactly one card is primary; its score remains the catalog-wide coverage value used by overview and service tiles.
 
 ```yaml
 apiVersion: northstar.dev/v1
 scorecards:
-  rules:
-    - id: description
-      title: Description is complete
-      description: At least 20 characters
-      path: metadata.description
-      operator: minLength
-      value: 20
-      weight: 1
-      severity: recommended
+  cards:
+    - id: metadata-quality
+      title: Metadata quality
+      description: Catalog metadata completeness
       enabled: true
-      tiers: [critical, high]
-      types: [backend, fullstack]
+      primary: true
+      rules:
+        - id: description
+          title: Description is complete
+          description: At least 20 characters
+          path: metadata.description
+          operator: minLength
+          value: 20
+          weight: 1
+          severity: recommended
+          enabled: true
+          tiers: [critical, high]
+          types: [backend, fullstack]
 ```
+
+## Scorecard fields
+
+| Field | Required | Validation |
+| --- | --- | --- |
+| `id` | Yes | Unique lowercase slug |
+| `title` | Yes | Non-empty display name |
+| `description` | No | Defaults to an empty string |
+| `enabled` | No | Defaults to `true` |
+| `primary` | No | Exactly one configured card must be primary |
+| `rules` | Yes | Array of weighted rules; may be empty |
+
+Legacy documents containing `scorecards.rules` are read as one primary `metadata-quality` card. The next scorecard save writes the new `cards` shape.
 
 ## Rule fields
 
 | Field | Required | Validation |
 | --- | --- | --- |
-| `id` | Yes | Non-empty unique identifier |
+| `id` | Yes | Unique within its scorecard |
 | `title` | Yes | Non-empty user-facing check name |
 | `description` | No | Defaults to an empty string |
-| `path` | Yes | Non-empty dotted metadata path |
+| `source` | No | Omission or `kind: metadata` reads service metadata; `kind: plugin` also requires a built-in plugin ID |
+| `path` | Yes | Dotted path inside the selected source |
 | `operator` | Yes | One of the operators below |
 | `value` | Depends | Expected value for operators other than `present` |
 | `weight` | Yes | Positive number; defaults to `1` |
@@ -40,69 +60,39 @@ scorecards:
 | Operator | Passes when |
 | --- | --- |
 | `present` | The value is not missing, `null`, or an empty string |
-| `equals` | The metadata value strictly equals `value` |
-| `oneOf` | `value` is an array containing the metadata value |
-| `minLength` | The metadata value is a string at least `value` characters long |
-| `contains` | The metadata value is an array and one serialized item contains the configured text, case-insensitively |
+| `equals` | The source value strictly equals `value` |
+| `oneOf` | `value` is an array containing the source value |
+| `minLength` | The source value is a string at least `value` characters long |
+| `contains` | The source value is an array and one serialized item contains the configured text, case-insensitively |
 
-## Common examples
+## Plugin-backed rules
+
+Select a built-in provider and use a path relative to that provider's facts:
 
 ```yaml
-- id: lifecycle
-  title: Lifecycle is declared
-  description: Lifecycle is accepted
-  path: spec.lifecycle
-  operator: oneOf
-  value: [production, experimental, deprecated]
-  weight: 1
-  severity: required
-  enabled: true
-
-- id: docs
-  title: Documentation link exists
-  description: Links contain documentation
-  path: spec.links
-  operator: contains
-  value: documentation
+- id: latest-action-succeeded
+  title: Latest workflow run succeeded
+  source:
+    kind: plugin
+    plugin: github-actions
+  path: runs.0.conclusion
+  operator: equals
+  value: success
   weight: 1
   severity: recommended
   enabled: true
 ```
 
-Weights normalize across enabled rules. Disabling a rule removes its weight from both the numerator and denominator.
+When the plugin is disabled or no snapshot exists, the rule is not applicable and contributes neither earned nor possible weight. A degraded provider may retain its last successful snapshot so an external outage does not immediately erase context.
 
 ## Scoped checks
 
-Add `tiers` when a check should apply only to particular service criticalities:
+Rules can target tiers, types, or both. When both are present, a service must match one selected tier and one selected type. Omitting a dimension makes it global.
 
-```yaml
-- id: runbook
-  title: Incident runbook exists
-  description: Higher-impact services need an operating procedure
-  path: spec.links
-  operator: contains
-  value: runbook
-  tiers: [critical, high]
-  weight: 2
-  severity: required
-  enabled: true
+For each service and scorecard, weights normalize only across enabled, applicable rules:
+
+```text
+weight of passing applicable rules ÷ weight of all applicable rules × 100
 ```
 
-Rules without `tiers` remain global, including for services that have not declared a tier. For each service, weights normalize only across applicable rules. Aggregate rule results use only eligible services as their denominator; a rule with no eligible services is shown as not applicable rather than failing.
-
-Add `types` to target architectural roles:
-
-```yaml
-- id: api-contract
-  title: API contract is linked
-  description: Server-side services publish an API contract
-  path: spec.links
-  operator: contains
-  value: api
-  types: [backend, fullstack]
-  weight: 1
-  severity: recommended
-  enabled: true
-```
-
-When a rule declares both `tiers` and `types`, the scopes intersect: a service must match one configured tier and one configured type. Omitting either field makes that dimension global. Weights normalize only across applicable rules, and aggregate pass rates count only eligible services.
+A scorecard with no applicable rules evaluates to 100. Aggregate rule results count only eligible services, and a rule with no eligible services is shown as not applicable rather than failing.

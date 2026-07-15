@@ -2,7 +2,7 @@ import { existsSync } from 'node:fs'
 import { mkdir, readFile, writeFile } from 'node:fs/promises'
 import { resolve } from 'node:path'
 import YAML from 'yaml'
-import { configSchema, configSections, defaults, serializeSection, type PortalConfig } from './config.js'
+import { configSchema, configSections, defaults, serializeSection, validateSection, type PortalConfig } from './config.js'
 import { getConfigOverrides, listAdminLogins, migrate, pool } from './db.js'
 
 const args=process.argv.slice(2);const outputArg=args.indexOf('--output');const output=outputArg>=0?args[outputArg+1]:undefined;const force=args.includes('--force')
@@ -12,11 +12,12 @@ const merge=(base:any,next:any):any=>Array.isArray(next)?next:next&&typeof next=
 await migrate()
 const legacyPath=process.env.NORTHSTAR_CONFIG_PATH||'./northstar.yaml';let raw:any={}
 if(existsSync(legacyPath))raw=YAML.parse(await readFile(legacyPath,'utf8'))||{}
+if(raw.scorecards?.rules&&!raw.scorecards.cards)raw.scorecards=validateSection('scorecards',raw.scorecards)
 if(raw.access?.bootstrapAdmins&&!raw.access.admins)raw.access={admins:raw.access.bootstrapAdmins}
 delete raw.access?.bootstrapAdmins
 let aggregate:any=merge(defaults,raw)
 for(const [section,value] of Object.entries(await getConfigOverrides())){
-  const normalized=section==='access'&&value&&typeof value==='object'&&'bootstrapAdmins' in value?{admins:(value as any).bootstrapAdmins}:value
+  const normalized=section==='access'&&value&&typeof value==='object'&&'bootstrapAdmins' in value?{admins:(value as any).bootstrapAdmins}:section==='scorecards'&&value&&typeof value==='object'&&'rules' in value&&!('cards' in value)?validateSection('scorecards',value):value
   aggregate={...aggregate,[section]:normalized}
 }
 const currentAdmins=await listAdminLogins();aggregate.access={admins:Array.from(new Set([...(aggregate.access?.admins||[]),...currentAdmins])).sort((a:string,b:string)=>a.localeCompare(b))}

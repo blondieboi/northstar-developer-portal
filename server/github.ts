@@ -1,8 +1,9 @@
 import YAML from 'yaml'
 import { z } from 'zod'
 import { ensureTeam, recordSync, removeServiceByRepository, setTeamMembers, upsertService, upsertTeam, upsertUser } from './db.js'
-import { getConfig, isAdminLogin, scoreWithConfig } from './config.js'
+import { getConfig, isAdminLogin, scoreWithConfig, scoresWithConfig } from './config.js'
 import { installationOctokit } from './github-app.js'
+import { refreshServicePlugins } from './plugins/runtime.js'
 
 export const metadataSchema = z.object({
   apiVersion: z.string(),
@@ -60,7 +61,8 @@ export async function syncInstallation(installationId:number) {
       const parsed = validateServiceMetadata(YAML.parse(Buffer.from(contentResponse.data.content,'base64').toString('utf8')))
       const owner=parsed.spec.owner.replace(/^team:/,'')
       await ensureTeam(owner)
-      await upsertService({name:parsed.metadata.name,description:parsed.metadata.description,owner,system:parsed.spec.system||'Unassigned',lifecycle:parsed.spec.lifecycle,tier:parsed.spec.tier||null,serviceType:parsed.spec.type||null,language:parsed.spec.language||repo.language||'Unknown',repository:repo.full_name,metadata:parsed,score:scoreMetadata(parsed),installationId})
+      const service=await upsertService({name:parsed.metadata.name,description:parsed.metadata.description,owner,system:parsed.spec.system||'Unassigned',lifecycle:parsed.spec.lifecycle,tier:parsed.spec.tier||null,serviceType:parsed.spec.type||null,language:parsed.spec.language||repo.language||'Unknown',repository:repo.full_name,metadata:parsed,score:scoreMetadata(parsed),scorecards:scoresWithConfig(parsed),installationId})
+      await refreshServicePlugins(service as any)
       results.push({repository:repo.full_name,status:'registered'})
     } catch (error) {
       const status = (error as {status?:number}).status===404?'unregistered':'invalid'
@@ -96,7 +98,8 @@ export async function syncRepository(installationId:number,owner:string,name:str
     if(Array.isArray(response.data)||!('content' in response.data))throw Object.assign(new Error('Metadata path is not a file'),{status:422})
     const parsed=validateServiceMetadata(YAML.parse(Buffer.from(response.data.content,'base64').toString('utf8')))
     const team=parsed.spec.owner.replace(/^team:/,'');await ensureTeam(team)
-    await upsertService({name:parsed.metadata.name,description:parsed.metadata.description,owner:team,system:parsed.spec.system||'Unassigned',lifecycle:parsed.spec.lifecycle,tier:parsed.spec.tier||null,serviceType:parsed.spec.type||null,language:parsed.spec.language||repository.language||'Unknown',repository:fullName,metadata:parsed,score:scoreMetadata(parsed),installationId})
+    const service=await upsertService({name:parsed.metadata.name,description:parsed.metadata.description,owner:team,system:parsed.spec.system||'Unassigned',lifecycle:parsed.spec.lifecycle,tier:parsed.spec.tier||null,serviceType:parsed.spec.type||null,language:parsed.spec.language||repository.language||'Unknown',repository:fullName,metadata:parsed,score:scoreMetadata(parsed),scorecards:scoresWithConfig(parsed),installationId})
+    await refreshServicePlugins(service as any)
     serviceStatus='registered'
   }catch(e){if((e as {status?:number}).status===404){await removeServiceByRepository(fullName);serviceStatus='unregistered'}else{serviceStatus='invalid';error=(e as Error).message}}
   try{

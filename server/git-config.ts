@@ -44,7 +44,9 @@ async function readRevision(commitSha:string){
   const documents={} as Record<ConfigSection,string>;const files:Partial<Record<ConfigSection,FileState>>={}
   await Promise.all(configSections.map(async section=>{
     const path=filePath(cfg.directory,section)
-    const response=await octokit.request('GET /repos/{owner}/{repo}/contents/{path}',{owner:cfg.owner,repo:cfg.repo,path,ref:commitSha})
+    let response:any
+    try{response=await octokit.request('GET /repos/{owner}/{repo}/contents/{path}',{owner:cfg.owner,repo:cfg.repo,path,ref:commitSha})}
+    catch(error){if(section==='integrations'&&(error as {status?:number}).status===404){documents[section]=serializeSection(section,defaults[section]);return}throw error}
     if(Array.isArray(response.data)||response.data.type!=='file'||!('content' in response.data))throw new Error(`${path} is not a file`)
     documents[section]=Buffer.from(response.data.content,'base64').toString('utf8');files[section]={path,sha:response.data.sha}
   }))
@@ -102,16 +104,18 @@ export const configReady=()=>hasApplied
 
 async function markWriteUnavailable(error:unknown,actor:string){const message=(error as Error).message;source={...source,status:'degraded',error:message,syncedAt:now()};await saveConfigState({observedSha:source.observedSha,appliedSha:source.appliedSha,status:'degraded',error:message,applied:false});await recordConfigSync({observedSha:source.observedSha,appliedSha:source.appliedSha,status:'failed',actor,error:message})}
 
-export async function commitSection(section:ConfigSection,value:unknown,expectedBlobSha:string,actor:{login:string;id:number;name:string}){
+export async function commitSection(section:ConfigSection,value:unknown,expectedBlobSha:string|undefined,actor:{login:string;id:number;name:string}){
   if(source.status!=='ready')throw new ConfigUnavailableError('GitHub configuration is degraded; writes are disabled until synchronization recovers')
   const checked=validateSection(section,value);const candidate=validateConfig({...getConfig(),[section]:checked});assertAdministratorConfigured(candidate)
   const cfg=settings();const path=filePath(cfg.directory,section)
   try{
     const octokit=await octokitFactory(cfg.installationId)
-    const current=await octokit.request('GET /repos/{owner}/{repo}/contents/{path}',{owner:cfg.owner,repo:cfg.repo,path,ref:cfg.branch})
-    if(Array.isArray(current.data)||current.data.type!=='file')throw new Error(`${path} is not a file`)
-    if(!expectedBlobSha||current.data.sha!==expectedBlobSha)throw new ConfigConflictError(`${section}.yaml changed in GitHub; reload before saving`)
-    const response=await octokit.request('PUT /repos/{owner}/{repo}/contents/{path}',{owner:cfg.owner,repo:cfg.repo,path,branch:cfg.branch,sha:expectedBlobSha,message:`settings(${section}): update via UI by @${actor.login}`,content:Buffer.from(serializeSection(section,checked)).toString('base64'),author:{name:actor.name||actor.login,email:`${actor.id}+${actor.login}@users.noreply.github.com`},committer:{name:'Perongen GitHub App',email:'noreply@perongen.local'}})
+    let currentSha:string|undefined
+    try{const current=await octokit.request('GET /repos/{owner}/{repo}/contents/{path}',{owner:cfg.owner,repo:cfg.repo,path,ref:cfg.branch});if(Array.isArray(current.data)||current.data.type!=='file')throw new Error(`${path} is not a file`);currentSha=current.data.sha}
+    catch(error){if((error as {status?:number}).status!==404||section!=='integrations')throw error}
+    if(currentSha&&(!expectedBlobSha||currentSha!==expectedBlobSha))throw new ConfigConflictError(`${section}.yaml changed in GitHub; reload before saving`)
+    if(!currentSha&&expectedBlobSha)throw new ConfigConflictError(`${section}.yaml changed in GitHub; reload before saving`)
+    const response=await octokit.request('PUT /repos/{owner}/{repo}/contents/{path}',{owner:cfg.owner,repo:cfg.repo,path,branch:cfg.branch,...(currentSha?{sha:currentSha}:{}),message:`settings(${section}): update via UI by @${actor.login}`,content:Buffer.from(serializeSection(section,checked)).toString('base64'),author:{name:actor.name||actor.login,email:`${actor.id}+${actor.login}@users.noreply.github.com`},committer:{name:'Perongen GitHub App',email:'noreply@perongen.local'}} as any)
     const commitSha=response.data.commit.sha;if(!commitSha)throw new Error('GitHub did not return a commit SHA')
     return syncGitConfig(actor.login,commitSha)
   }catch(error){if(error instanceof ConfigConflictError||(error as {status?:number}).status===409||String((error as Error).message).includes('does not match'))throw new ConfigConflictError(`${section}.yaml changed in GitHub; reload before saving`);await markWriteUnavailable(error,actor.login);throw new ConfigUnavailableError(`GitHub configuration write failed: ${(error as Error).message}`)}

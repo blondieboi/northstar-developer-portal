@@ -27,13 +27,13 @@ The overview shows the active team, its owned services, average standards covera
 3. Select a service to open its dossier.
 4. Review ownership, lifecycle, language, source repository, useful links, stored metadata, and scorecard results.
 
-The dossier reflects the latest synchronized repository metadata. If a field is incorrect, update the repository rather than trying to edit the service in the portal.
+The dossier reflects the latest synchronized repository metadata and enabled plugin snapshots. If metadata is incorrect, update the repository; if an operational signal is stale, refresh its provider under Integrations.
 
 ## Understand a score
 
 Every enabled rule contributes its configured weight to the service score. A score of 100 means the stored metadata passes all active checks; it does not claim that the service is operationally healthy.
 
-Open **Scorecards** for organization-wide coverage, or review the checks in a service dossier for a single service.
+Open **Scorecards**, choose a named card, and compare organization-wide coverage. A service dossier shows every enabled scorecard score and expands its primary checks.
 
 ## Run an action
 

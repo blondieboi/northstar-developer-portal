@@ -18,7 +18,7 @@ Environment variables contain deployment location, credentials, and bootstrap va
 | --- | --- | --- |
 | `NORTHSTAR_CONFIG_REPOSITORY` | Yes | GitHub `owner/repository` containing configuration |
 | `NORTHSTAR_CONFIG_BRANCH` | Yes | Configuration branch |
-| `NORTHSTAR_CONFIG_DIRECTORY` | Yes | Directory containing the six YAML files |
+| `NORTHSTAR_CONFIG_DIRECTORY` | Yes | Directory containing the seven YAML files; legacy installations may initially omit `integrations.yaml` |
 | `NORTHSTAR_CONFIG_INSTALLATION_ID` | Yes | GitHub App installation with configuration repository access |
 | `NORTHSTAR_CONFIG_POLL_INTERVAL_SECONDS` | No | Recovery poll interval; defaults to `60` |
 | `NORTHSTAR_CONFIG_PATH` | Migration only | Legacy file read by `config:export` |

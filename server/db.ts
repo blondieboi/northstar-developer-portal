@@ -17,20 +17,34 @@ export async function listServices() {
   return rows
 }
 
+export async function findServiceByRepository(repository:string){if(!pool)return null;return pool.query('select * from services where repository=$1',[repository]).then(result=>result.rows[0]||null)}
+
 export async function upsertService(service: Record<string, unknown>) {
   if (!pool) return service
-  const values = [service.name, service.description, service.owner, service.system, service.lifecycle, service.tier, service.serviceType, service.language, service.repository, service.metadata, service.score, service.installationId]
+  const values = [service.name, service.description, service.owner, service.system, service.lifecycle, service.tier, service.serviceType, service.language, service.repository, service.metadata, service.score, service.scorecards||{}, service.installationId]
   const { rows } = await pool.query(`
-    insert into services (name, description, owner, system, lifecycle, tier, service_type, language, repository, metadata, score, installation_id)
-    values ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,$12)
+    insert into services (name, description, owner, system, lifecycle, tier, service_type, language, repository, metadata, score, scorecards, installation_id)
+    values ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,$12,$13)
     on conflict (name) do update set description=excluded.description, owner=excluded.owner,
       system=excluded.system, lifecycle=excluded.lifecycle, tier=excluded.tier, service_type=excluded.service_type, language=excluded.language,
-      repository=excluded.repository, metadata=excluded.metadata, score=excluded.score,
+      repository=excluded.repository, metadata=excluded.metadata, score=excluded.score, scorecards=excluded.scorecards,
       installation_id=excluded.installation_id, updated_at=now()
     returning *`, values)
   return rows[0]
 }
-export async function removeServiceByRepository(repository:string){if(!pool)return;await pool.query('delete from services where repository=$1',[repository])}
+export async function updateServiceScores(id:string|number,score:number,scorecards:Record<string,number>){if(!pool)return;await pool.query('update services set score=$2,scorecards=$3 where id=$1',[id,score,scorecards])}
+export async function removeServiceByRepository(repository:string){if(!pool)return;const removed=await pool.query('delete from services where repository=$1 returning name',[repository]);for(const row of removed.rows)await pool.query("delete from plugin_snapshots where entity_kind='service' and entity_key=$1",[row.name])}
+
+export async function upsertPluginSnapshot(snapshot:{pluginId:string;entityKind:string;entityKey:string;status:string;data?:unknown;error?:string|null;expiresAt?:Date|null}){
+  if(!pool)return snapshot
+  const {rows}=await pool.query(`insert into plugin_snapshots(plugin_id,entity_kind,entity_key,status,data,error,observed_at,expires_at)
+    values($1,$2,$3,$4,$5,$6,now(),$7) on conflict(plugin_id,entity_kind,entity_key) do update set
+    status=excluded.status,data=coalesce(excluded.data,plugin_snapshots.data),error=excluded.error,observed_at=now(),expires_at=excluded.expires_at returning *`,
+    [snapshot.pluginId,snapshot.entityKind,snapshot.entityKey,snapshot.status,snapshot.data??null,snapshot.error||null,snapshot.expiresAt||null])
+  return rows[0]
+}
+export async function listPluginSnapshots(entityKind?:string,entityKey?:string){if(!pool)return[];if(entityKind&&entityKey)return pool.query('select * from plugin_snapshots where entity_kind=$1 and entity_key=$2',[entityKind,entityKey]).then(result=>result.rows);if(entityKind)return pool.query('select * from plugin_snapshots where entity_kind=$1',[entityKind]).then(result=>result.rows);return pool.query('select * from plugin_snapshots').then(result=>result.rows)}
+export async function pluginHealthRows(){if(!pool)return[];return pool.query('select plugin_id,status,error,observed_at,expires_at from plugin_snapshots order by observed_at desc').then(result=>result.rows)}
 
 export async function ensureTeam(name:string) {
   if(!pool)return null

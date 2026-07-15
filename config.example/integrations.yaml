@@ -1,0 +1,8 @@
+apiVersion: northstar.dev/v1
+integrations:
+  plugins:
+    - id: github-actions
+      enabled: true
+      config:
+        lookbackDays: 30
+        maximumRuns: 20

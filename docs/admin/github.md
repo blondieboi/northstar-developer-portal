@@ -10,9 +10,9 @@ Create a GitHub App owned by the organization that owns the catalog repositories
 | --- | --- | --- |
 | Contents | Read and write | Read catalog metadata and commit canonical configuration |
 | Metadata | Read | Discover installed repositories |
-| Actions | Write | Dispatch configured workflows |
+| Actions | Write | Read workflow activity and dispatch configured workflows |
 
-Subscribe the App to **Push** events.
+Subscribe the App to **Push** and **Workflow run** events. Push events synchronize configuration and metadata. Workflow run events refresh GitHub Actions plugin data for the affected service.
 
 ## Configure URLs
 
@@ -54,6 +54,6 @@ GITHUB_WEBHOOK_SECRET=secret-store-value
 
 ## Verify the connection
 
-Open **Settings → Integrations**. Database, GitHub App, OAuth, and configuration health should report ready. Recent push events appear in the webhook delivery ledger with their status and message.
+Open **Settings → Integrations**. Database, GitHub App, OAuth, configuration, and enabled plugin health should report ready. Recent push and workflow-run events appear in the webhook delivery ledger with their status and message.
 
 Perongen rejects an invalid HMAC signature. Duplicate deliveries are ignored, and pushes that do not change a configured metadata or configuration path are recorded without running an unnecessary synchronization.

@@ -43,4 +43,20 @@ describe('Git configuration push routing',()=>{
     await expect(commitSection('general',defaults.general,'good-general',{login:'admin',id:1,name:'Admin'})).rejects.toBeInstanceOf(ConfigConflictError)
     expect(request.mock.calls.some(([route])=>String(route).startsWith('PUT'))).toBe(false)
   })
+  it('loads legacy repositories without integrations.yaml and creates it on first save',async()=>{
+    let created=false
+    const request=vi.fn(async(route:string,params:any)=>{
+      if(route.includes('/git/ref/'))return{data:{object:{sha:'legacy'}}}
+      const section=String(params.path).split('/').pop()!.replace('.yaml','') as ConfigSection
+      if(route.startsWith('PUT')){created=true;return{data:{commit:{sha:'with-integrations'}}}}
+      if(section==='integrations'&&!created)throw Object.assign(new Error('Not found'),{status:404})
+      return{data:{type:'file',sha:`${created?'with-integrations':'legacy'}-${section}`,content:Buffer.from(serializeSection(section,defaults[section])).toString('base64')}}
+    })
+    setGitConfigOctokitFactoryForTests((async()=>({request})) as any)
+    await initializeGitConfig(async()=>{})
+    expect(getConfigSource().files.integrations).toBeUndefined()
+    await commitSection('integrations',defaults.integrations,undefined,{login:'admin',id:1,name:'Admin'})
+    expect(created).toBe(true)
+    expect(getConfigSource().files.integrations?.sha).toBe('with-integrations-integrations')
+  })
 })
