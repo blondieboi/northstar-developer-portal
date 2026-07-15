@@ -16,6 +16,7 @@ export const metadataSchema = z.object({
   spec: z.object({
     owner: z.string().min(1),
     lifecycle: z.string().min(1),
+    tier: z.string().min(1).optional(),
     system: z.string().optional(),
     language: z.string().optional(),
     links: z.array(z.object({ name:z.string(), url:z.string().url() })).optional()
@@ -32,6 +33,14 @@ export function scoreMetadata(value:z.infer<typeof metadataSchema>) {
   return scoreWithConfig(value)
 }
 
+export function validateServiceMetadata(value:unknown){
+  const parsed=metadataSchema.parse(value)
+  const config=getConfig()
+  if(!config.catalog.lifecycles.includes(parsed.spec.lifecycle))throw new Error(`Unsupported lifecycle: ${parsed.spec.lifecycle}`)
+  if(parsed.spec.tier&&!config.catalog.tiers.some(tier=>tier.id===parsed.spec.tier))throw new Error(`Unsupported tier: ${parsed.spec.tier}`)
+  return parsed
+}
+
 export async function syncInstallation(installationId:number) {
   const octokit = await installationOctokit(installationId)
   const repositories: Array<{owner:{login:string};name:string;full_name:string;language?:string|null}>=[]
@@ -46,11 +55,10 @@ export async function syncInstallation(installationId:number) {
     try {
       const contentResponse = await octokit.request('GET /repos/{owner}/{repo}/contents/{path}',{owner:repo.owner.login,repo:repo.name,path:getConfig().catalog.serviceMetadataPath})
       if (Array.isArray(contentResponse.data) || !('content' in contentResponse.data)) continue
-      const parsed = metadataSchema.parse(YAML.parse(Buffer.from(contentResponse.data.content,'base64').toString('utf8')))
-      if(!getConfig().catalog.lifecycles.includes(parsed.spec.lifecycle))throw new Error(`Unsupported lifecycle: ${parsed.spec.lifecycle}`)
+      const parsed = validateServiceMetadata(YAML.parse(Buffer.from(contentResponse.data.content,'base64').toString('utf8')))
       const owner=parsed.spec.owner.replace(/^team:/,'')
       await ensureTeam(owner)
-      await upsertService({name:parsed.metadata.name,description:parsed.metadata.description,owner,system:parsed.spec.system||'Unassigned',lifecycle:parsed.spec.lifecycle,language:parsed.spec.language||repo.language||'Unknown',repository:repo.full_name,metadata:parsed,score:scoreMetadata(parsed),installationId})
+      await upsertService({name:parsed.metadata.name,description:parsed.metadata.description,owner,system:parsed.spec.system||'Unassigned',lifecycle:parsed.spec.lifecycle,tier:parsed.spec.tier||null,language:parsed.spec.language||repo.language||'Unknown',repository:repo.full_name,metadata:parsed,score:scoreMetadata(parsed),installationId})
       results.push({repository:repo.full_name,status:'registered'})
     } catch (error) {
       const status = (error as {status?:number}).status===404?'unregistered':'invalid'
@@ -84,10 +92,9 @@ export async function syncRepository(installationId:number,owner:string,name:str
   try{
     const response=await octokit.request('GET /repos/{owner}/{repo}/contents/{path}',{owner,repo:name,path:getConfig().catalog.serviceMetadataPath})
     if(Array.isArray(response.data)||!('content' in response.data))throw Object.assign(new Error('Metadata path is not a file'),{status:422})
-    const parsed=metadataSchema.parse(YAML.parse(Buffer.from(response.data.content,'base64').toString('utf8')))
-    if(!getConfig().catalog.lifecycles.includes(parsed.spec.lifecycle))throw new Error(`Unsupported lifecycle: ${parsed.spec.lifecycle}`)
+    const parsed=validateServiceMetadata(YAML.parse(Buffer.from(response.data.content,'base64').toString('utf8')))
     const team=parsed.spec.owner.replace(/^team:/,'');await ensureTeam(team)
-    await upsertService({name:parsed.metadata.name,description:parsed.metadata.description,owner:team,system:parsed.spec.system||'Unassigned',lifecycle:parsed.spec.lifecycle,language:parsed.spec.language||repository.language||'Unknown',repository:fullName,metadata:parsed,score:scoreMetadata(parsed),installationId})
+    await upsertService({name:parsed.metadata.name,description:parsed.metadata.description,owner:team,system:parsed.spec.system||'Unassigned',lifecycle:parsed.spec.lifecycle,tier:parsed.spec.tier||null,language:parsed.spec.language||repository.language||'Unknown',repository:fullName,metadata:parsed,score:scoreMetadata(parsed),installationId})
     serviceStatus='registered'
   }catch(e){if((e as {status?:number}).status===404){await removeServiceByRepository(fullName);serviceStatus='unregistered'}else{serviceStatus='invalid';error=(e as Error).message}}
   try{

@@ -64,6 +64,7 @@ metadata:
 spec:
   owner: team:checkout
   lifecycle: production
+  tier: critical
   system: commerce
   language: TypeScript
   links:

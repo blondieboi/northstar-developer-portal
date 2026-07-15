@@ -1,5 +1,5 @@
 import type { PortalConfig, ConfigSection } from './config.js'
-import { activateConfig, assertAdministratorConfigured, configSections, defaults, getBreakGlassAdmins, getConfig, parseConfigDocuments, serializeSection, validateSection } from './config.js'
+import { activateConfig, assertAdministratorConfigured, configSections, defaults, getBreakGlassAdmins, getConfig, parseConfigDocuments, serializeSection, validateConfig, validateSection } from './config.js'
 import { getConfigState, projectUserRoles, recordConfigSync, saveConfigState } from './db.js'
 import { installationOctokit } from './github-app.js'
 
@@ -104,7 +104,7 @@ async function markWriteUnavailable(error:unknown,actor:string){const message=(e
 
 export async function commitSection(section:ConfigSection,value:unknown,expectedBlobSha:string,actor:{login:string;id:number;name:string}){
   if(source.status!=='ready')throw new ConfigUnavailableError('GitHub configuration is degraded; writes are disabled until synchronization recovers')
-  const checked=validateSection(section,value);const candidate={...getConfig(),[section]:checked};assertAdministratorConfigured(candidate)
+  const checked=validateSection(section,value);const candidate=validateConfig({...getConfig(),[section]:checked});assertAdministratorConfigured(candidate)
   const cfg=settings();const path=filePath(cfg.directory,section)
   try{
     const octokit=await octokitFactory(cfg.installationId)

@@ -26,10 +26,23 @@ catalog:
   serviceMetadataPath: .portal/service.yaml
   teamMetadataPath: .portal/team.yaml
   lifecycles: [production, experimental, deprecated]
+  tiers:
+    - id: critical
+      title: Critical
+      description: Customer-facing or business-critical services
+    - id: high
+      title: High
+      description: Important services with significant operational impact
+    - id: standard
+      title: Standard
+      description: Normal production services
+    - id: low
+      title: Low
+      description: Low-impact or internal services
   installationId: 12345678
 ```
 
-The paths and lifecycle list must not be empty. The installation ID is a positive integer or `null`.
+The paths and lifecycle list must not be empty. Tier IDs are unique lowercase slugs; their array order runs from highest to lowest criticality. An empty or omitted tier list disables tiering for older configurations. The installation ID is a positive integer or `null`.
 
 ## Access
 

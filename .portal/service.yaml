@@ -10,6 +10,7 @@ metadata:
 spec:
   owner: team:platform
   lifecycle: production
+  tier: tier-2
   system: developer-experience
   language: TypeScript
   links:
