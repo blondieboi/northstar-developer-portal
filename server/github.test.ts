@@ -4,7 +4,7 @@ import { metadataSchema, scoreMetadata, teamSchema, validateServiceMetadata } fr
 const complete={
   apiVersion:'northstar.dev/v1',kind:'Service' as const,
   metadata:{name:'checkout-api',description:'Coordinates checkout and payments.'},
-  spec:{owner:'team:checkout',lifecycle:'production' as const,tier:'critical',system:'commerce',language:'TypeScript',links:[{name:'Documentation',url:'https://docs.example.com/checkout'}]}
+  spec:{owner:'team:checkout',lifecycle:'production' as const,tier:'critical',type:'backend',system:'commerce',language:'TypeScript',links:[{name:'Documentation',url:'https://docs.example.com/checkout'}]}
 }
 
 describe('service metadata',()=>{
@@ -18,6 +18,14 @@ describe('service metadata',()=>{
   it('keeps tier optional for existing service metadata',()=>{
     const {tier:_,...spec}=complete.spec
     expect(validateServiceMetadata({...complete,spec}).spec.tier).toBeUndefined()
+  })
+  it('validates a service type against catalog configuration',()=>{
+    expect(validateServiceMetadata(complete).spec.type).toBe('backend')
+    expect(()=>validateServiceMetadata({...complete,spec:{...complete.spec,type:'worker'}})).toThrow('Unsupported service type: worker')
+  })
+  it('keeps type optional for existing service metadata',()=>{
+    const {type:_,...spec}=complete.spec
+    expect(validateServiceMetadata({...complete,spec}).spec.type).toBeUndefined()
   })
   it('scores a complete service at 100',()=>expect(scoreMetadata(complete)).toBe(100))
   it('scores each missing recommended field independently',()=>{

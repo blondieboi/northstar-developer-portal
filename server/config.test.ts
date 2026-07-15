@@ -16,23 +16,29 @@ describe('portal configuration',()=>{
     const old=defaults.scorecards.rules.map(r=>r.enabled);defaults.scorecards.rules.forEach(r=>r.enabled=false)
     expect(scoreWithConfig({})).toBe(100);defaults.scorecards.rules.forEach((r,i)=>r.enabled=old[i])
   })
-  it('scopes weighted rules to configured service tiers',()=>{
+  it('scopes weighted rules to configured service tiers and types',()=>{
     const scoped={...defaults,scorecards:{rules:[
       {id:'owner',title:'Owner',description:'',path:'spec.owner',operator:'present' as const,weight:1,severity:'required' as const,enabled:true},
-      {id:'runbook',title:'Runbook',description:'',path:'spec.runbook',operator:'present' as const,weight:1,severity:'required' as const,enabled:true,tiers:['critical']}
+      {id:'runbook',title:'Runbook',description:'',path:'spec.runbook',operator:'present' as const,weight:1,severity:'required' as const,enabled:true,tiers:['critical'],types:['backend']}
     ]}}
     activateConfig(scoped)
-    expect(scoreWithConfig({spec:{owner:'team:platform',tier:'critical'}})).toBe(50)
-    expect(scoreWithConfig({spec:{owner:'team:platform',tier:'low'}})).toBe(100)
+    expect(scoreWithConfig({spec:{owner:'team:platform',tier:'critical',type:'backend'}})).toBe(50)
+    expect(scoreWithConfig({spec:{owner:'team:platform',tier:'critical',type:'frontend'}})).toBe(100)
+    expect(scoreWithConfig({spec:{owner:'team:platform',tier:'low',type:'backend'}})).toBe(100)
     activateConfig(defaults)
   })
   it('rejects duplicate tiers and unknown scorecard tier scopes',()=>{
     expect(()=>validateConfig({...defaults,catalog:{...defaults.catalog,tiers:[defaults.catalog.tiers[0],defaults.catalog.tiers[0]]}})).toThrow('Duplicate tier id')
     expect(()=>validateConfig({...defaults,scorecards:{rules:[{...defaults.scorecards.rules[0],tiers:['urgent']}]}})).toThrow('Unknown tier')
   })
-  it('loads older catalog documents without a tiers field',()=>{
-    const legacy={...defaults.catalog} as any;delete legacy.tiers
+  it('rejects duplicate service types and unknown scorecard type scopes',()=>{
+    expect(()=>validateConfig({...defaults,catalog:{...defaults.catalog,types:[defaults.catalog.types[0],defaults.catalog.types[0]]}})).toThrow('Duplicate service type id')
+    expect(()=>validateConfig({...defaults,scorecards:{rules:[{...defaults.scorecards.rules[0],types:['worker']}]}})).toThrow('Unknown service type')
+  })
+  it('loads older catalog documents without classification fields',()=>{
+    const legacy={...defaults.catalog} as any;delete legacy.tiers;delete legacy.types
     expect((validateSection('catalog',legacy) as typeof defaults.catalog).tiers).toEqual([])
+    expect((validateSection('catalog',legacy) as typeof defaults.catalog).types).toEqual([])
   })
   it('round-trips all six strict section documents',()=>{
     const documents=Object.fromEntries(configSections.map(section=>[section,serializeSection(section,defaults[section])])) as any

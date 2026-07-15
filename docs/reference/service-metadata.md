@@ -17,6 +17,7 @@ spec:
   owner: team:checkout
   lifecycle: production
   tier: critical
+  type: backend
   system: commerce
   language: TypeScript
   links:
@@ -39,6 +40,7 @@ spec:
 | `spec.owner` | Yes | Non-empty owner; `team:<name>` connects to team metadata |
 | `spec.lifecycle` | Yes | Must also appear in configured catalog lifecycles |
 | `spec.tier` | No | Stable ID from the configured catalog tiers |
+| `spec.type` | No | Stable ID from the configured catalog service types |
 | `spec.system` | No | Defaults to `Unassigned` in catalog views |
 | `spec.language` | No | Falls back to the repository language, then `Unknown` |
 | `spec.links` | No | Array of name and valid URL pairs |
@@ -69,6 +71,17 @@ spec:
 
 The field is optional so existing services continue to synchronize. Administrators can enforce adoption with a global scorecard rule that checks whether `spec.tier` is present. When supplied, the tier must match the active catalog configuration.
 
+## Service type
+
+Type identifies the service's architectural role independently of lifecycle and operational tier. Configure the available types in `catalog.yaml`, then reference the stable ID:
+
+```yaml
+spec:
+  type: backend
+```
+
+The field is optional for backward compatibility. When supplied, it must match the active catalog configuration. Administrators can require it with a global scorecard rule or use it to limit checks to roles such as frontend, backend, fullstack, pipeline, or configuration.
+
 ## Scorecard paths
 
-Scorecards evaluate the parsed document using dotted paths such as `metadata.description`, `spec.owner`, `spec.tier`, or `spec.links`. Keep field names stable when rules depend on them.
+Scorecards evaluate the parsed document using dotted paths such as `metadata.description`, `spec.owner`, `spec.tier`, `spec.type`, or `spec.links`. Keep field names stable when rules depend on them.

@@ -6,6 +6,7 @@ create table if not exists services (
   system text not null default 'Unassigned',
   lifecycle text not null default 'experimental',
   tier text,
+  service_type text,
   language text not null default 'Unknown',
   repository text not null unique,
   metadata_path text not null default '.portal/service.yaml',
@@ -18,6 +19,9 @@ create table if not exists services (
 alter table services add column if not exists tier text;
 update services set tier=metadata -> 'spec' ->> 'tier'
 where tier is null and metadata -> 'spec' ->> 'tier' is not null and metadata -> 'spec' ->> 'tier' <> '';
+alter table services add column if not exists service_type text;
+update services set service_type=metadata -> 'spec' ->> 'type'
+where service_type is null and metadata -> 'spec' ->> 'type' is not null and metadata -> 'spec' ->> 'type' <> '';
 
 create table if not exists teams (
   id bigserial primary key,

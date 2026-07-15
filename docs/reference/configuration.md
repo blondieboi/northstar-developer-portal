@@ -39,10 +39,26 @@ catalog:
     - id: low
       title: Low
       description: Low-impact or internal services
+  types:
+    - id: frontend
+      title: Frontend
+      description: User-facing web or mobile interface
+    - id: backend
+      title: Backend
+      description: Server-side service or API
+    - id: fullstack
+      title: Fullstack
+      description: Combined user interface and server-side application
+    - id: pipeline
+      title: Pipeline
+      description: Data, delivery, or automation pipeline
+    - id: configuration
+      title: Configuration
+      description: Configuration or policy repository
   installationId: 12345678
 ```
 
-The paths and lifecycle list must not be empty. Tier IDs are unique lowercase slugs; their array order runs from highest to lowest criticality. An empty or omitted tier list disables tiering for older configurations. The installation ID is a positive integer or `null`.
+The paths and lifecycle list must not be empty. Tier and service type IDs are unique lowercase slugs. Tier array order runs from highest to lowest criticality; service type order controls how options appear in the UI. An empty or omitted list disables that classification for older configurations. The installation ID is a positive integer or `null`.
 
 ## Access
 

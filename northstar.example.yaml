@@ -22,6 +22,22 @@ catalog:
     - id: low
       title: Low
       description: Low-impact or internal services
+  types:
+    - id: frontend
+      title: Frontend
+      description: User-facing web or mobile interface
+    - id: backend
+      title: Backend
+      description: Server-side service or API
+    - id: fullstack
+      title: Fullstack
+      description: Combined user interface and server-side application
+    - id: pipeline
+      title: Pipeline
+      description: Data, delivery, or automation pipeline
+    - id: configuration
+      title: Configuration
+      description: Configuration or policy repository
   installationId: null
 scorecards:
   rules: []

@@ -9,6 +9,14 @@ scorecards:
       weight: 1
       severity: required
       enabled: true
+    - id: type
+      title: Service type is declared
+      description: Architectural role is explicit
+      path: spec.type
+      operator: present
+      weight: 1
+      severity: required
+      enabled: true
     - id: critical-docs
       title: Critical services have documentation
       description: Documentation is required for higher-impact services
@@ -19,3 +27,4 @@ scorecards:
       severity: required
       enabled: true
       tiers: [critical, high]
+      types: [backend, fullstack]
