@@ -30,6 +30,7 @@ export async function upsertService(service: Record<string, unknown>) {
     returning *`, values)
   return rows[0]
 }
+export async function removeServiceByRepository(repository:string){if(!pool)return;await pool.query('delete from services where repository=$1',[repository])}
 
 export async function ensureTeam(name:string) {
   if(!pool)return null
@@ -38,10 +39,10 @@ export async function ensureTeam(name:string) {
   return rows[0]
 }
 
-export async function upsertTeam(team:{name:string;title:string;description:string}){
+export async function upsertTeam(team:{name:string;title:string;description:string;links?:Array<{name:string;url:string}>}){
   if(!pool)return null
-  const {rows}=await pool.query(`insert into teams(name,title,description) values($1,$2,$3)
-    on conflict(name) do update set title=excluded.title,description=excluded.description returning *`,[team.name,team.title,team.description])
+  const {rows}=await pool.query(`insert into teams(name,title,description,links) values($1,$2,$3,$4)
+    on conflict(name) do update set title=excluded.title,description=excluded.description,links=excluded.links returning *`,[team.name,team.title,team.description,team.links||[]])
   return rows[0]
 }
 
@@ -55,9 +56,51 @@ export async function upsertUser(user:{githubId:number;login:string;name:string;
   if(!pool)return user
   const {rows}=await pool.query(`insert into users(github_id,login,name,avatar_url,email,bio,role,last_seen_at)
     values($1,$2,$3,$4,$5,$6,$7,now()) on conflict(login) do update set github_id=excluded.github_id,name=excluded.name,
-    avatar_url=excluded.avatar_url,email=excluded.email,bio=excluded.bio,role=excluded.role,last_seen_at=now() returning *`,[user.githubId,user.login,user.name,user.avatarUrl,user.email||null,user.bio||null,user.role])
+    avatar_url=excluded.avatar_url,email=excluded.email,bio=excluded.bio,role=users.role,last_seen_at=now() returning *`,[user.githubId,user.login,user.name,user.avatarUrl,user.email||null,user.bio||null,user.role])
   return rows[0]
 }
+
+export async function findUser(login:string){if(!pool)return null;return pool.query('select * from users where lower(login)=lower($1)',[login]).then(x=>x.rows[0]||null)}
+export async function setUserPrimaryTeam(login:string,teamName:string){
+  if(!pool)return{login,primary_team:teamName}
+  const membership=await pool.query(`select 1 from users u join team_members tm on tm.user_id=u.id join teams t on t.id=tm.team_id where lower(u.login)=lower($1) and t.name=$2`,[login,teamName])
+  if(!membership.rowCount)throw new Error('Primary team must be one of your team memberships')
+  return (await pool.query('update users set primary_team=$2 where lower(login)=lower($1) returning login,primary_team',[login,teamName])).rows[0]
+}
+export async function setUserRole(login:string,role:'admin'|'member',actor:string){
+  if(!pool)return null
+  const client=await pool.connect();try{await client.query('begin');const before=(await client.query('select login,role from users where lower(login)=lower($1) for update',[login])).rows[0];if(!before)throw new Error('User not found');if(before.role==='admin'&&role==='member'){const count=Number((await client.query("select count(*) from users where role='admin'")).rows[0].count);if(count<=1)throw new Error('The final administrator cannot be demoted')};const after=(await client.query('update users set role=$2 where lower(login)=lower($1) returning login,role',[login,role])).rows[0];await client.query('insert into audit_events(category,action,actor_login,target,before_value,after_value) values($1,$2,$3,$4,$5,$6)',['access','role.changed',actor,login,before,after]);await client.query('commit');return after}catch(e){await client.query('rollback');throw e}finally{client.release()}
+}
+
+export async function getConfigOverrides(){if(!pool)return {};const {rows}=await pool.query('select section,value from config_overrides');return Object.fromEntries(rows.map(r=>[r.section,r.value]))}
+export async function getConfigState(){if(!pool)return null;return pool.query('select * from config_state where id=1').then(x=>x.rows[0]||null)}
+export async function saveConfigState(state:{observedSha?:string|null;appliedSha?:string|null;config?:unknown;fileShas?:Record<string,string>;status:string;error?:string|null;applied:boolean}){
+  if(!pool)return
+  await pool.query(`insert into config_state(id,observed_sha,applied_sha,config,file_shas,status,error,synced_at,applied_at)
+    values(1,$1,$2,$3,$4,$5,$6,now(),case when $7 then now() else null end)
+    on conflict(id) do update set observed_sha=excluded.observed_sha,applied_sha=excluded.applied_sha,
+      config=coalesce(excluded.config,config_state.config),file_shas=case when $7 then excluded.file_shas else config_state.file_shas end,
+      status=excluded.status,error=excluded.error,synced_at=now(),applied_at=case when $7 then now() else config_state.applied_at end`,
+    [state.observedSha||null,state.appliedSha||null,state.config||null,state.fileShas||{},state.status,state.error||null,state.applied])
+}
+export async function recordConfigSync(event:{observedSha?:string|null;appliedSha?:string|null;status:string;actor:string;error?:string|null}){
+  if(!pool)return
+  await pool.query('insert into config_sync_events(observed_sha,applied_sha,status,actor_login,error) values($1,$2,$3,$4,$5)',[event.observedSha||null,event.appliedSha||null,event.status,event.actor,event.error||null])
+  await pool.query('insert into audit_events(category,action,actor_login,target,after_value) values($1,$2,$3,$4,$5)',['configuration',`sync.${event.status}`,event.actor,event.observedSha||'unknown',{appliedSha:event.appliedSha,error:event.error}])
+}
+export async function listAdminLogins(){if(!pool)return[];return pool.query("select login from users where role='admin' order by lower(login)").then(x=>x.rows.map(row=>String(row.login)))}
+export async function projectUserRoles(admins:Set<string>){if(!pool)return;await pool.query("update users set role=case when lower(login)=any($1::text[]) then 'admin' else 'member' end",[[...admins].map(x=>x.toLowerCase())])}
+export async function saveConfigOverride(section:string,value:unknown,actor:string,action='updated'){
+  if(!pool)return;const client=await pool.connect();try{await client.query('begin');const before=(await client.query('select value from config_overrides where section=$1',[section])).rows[0]?.value||null;await client.query('insert into config_overrides(section,value,updated_by) values($1,$2,$3) on conflict(section) do update set value=excluded.value,updated_by=excluded.updated_by,updated_at=now()',[section,value,actor]);await client.query('insert into config_revisions(section,value,actor_login,action) values($1,$2,$3,$4)',[section,value,actor,action]);await client.query('insert into audit_events(category,action,actor_login,target,before_value,after_value) values($1,$2,$3,$4,$5,$6)',['configuration',action,actor,section,before,value]);await client.query('commit')}catch(e){await client.query('rollback');throw e}finally{client.release()}}
+export async function resetConfigOverride(section:string,actor:string){if(!pool)return;const before=(await pool.query('delete from config_overrides where section=$1 returning value',[section])).rows[0]?.value||null;await pool.query('insert into config_revisions(section,value,actor_login,action) values($1,$2,$3,$4)',[section,null,actor,'reset']);await pool.query('insert into audit_events(category,action,actor_login,target,before_value) values($1,$2,$3,$4,$5)',['configuration','reset',actor,section,before])}
+export async function listConfigRevisions(){if(!pool)return [];return pool.query('select * from config_revisions order by created_at desc limit 100').then(x=>x.rows)}
+export async function getConfigRevision(id:number){if(!pool)return null;return pool.query('select * from config_revisions where id=$1',[id]).then(x=>x.rows[0]||null)}
+export async function listAuditEvents(){if(!pool)return [];return pool.query('select * from audit_events order by created_at desc limit 100').then(x=>x.rows)}
+export async function recordWebhook(delivery:{deliveryId:string;event:string;action?:string;repository?:string;installationId?:number;status:string;message?:string}){if(!pool)return;await pool.query(`insert into webhook_deliveries(delivery_id,event,action,repository,installation_id,status,message) values($1,$2,$3,$4,$5,$6,$7) on conflict(delivery_id) do nothing`,[delivery.deliveryId,delivery.event,delivery.action||null,delivery.repository||null,delivery.installationId||null,delivery.status,delivery.message||null])}
+export async function webhookSeen(deliveryId:string){if(!pool)return false;return Boolean((await pool.query('select 1 from webhook_deliveries where delivery_id=$1',[deliveryId])).rowCount)}
+export async function listWebhooks(){if(!pool)return [];return pool.query('select * from webhook_deliveries order by created_at desc limit 50').then(x=>x.rows)}
+export async function onboardingStats(){if(!pool)return{users:0,services:0,syncs:0};const {rows}=await pool.query(`select (select count(*)::int from users) users,(select count(*)::int from services) services,(select count(*)::int from sync_runs where status='completed') syncs`);return rows[0]}
+export async function recalculateScores(score:(metadata:any)=>number){if(!pool)return;const {rows}=await pool.query('select id,metadata from services');for(const row of rows)await pool.query('update services set score=$2 where id=$1',[row.id,score(row.metadata)])}
 
 export async function listTeams(){
   if(!pool)return []
@@ -90,7 +133,7 @@ export async function recordSync(installationId:number,results:Array<{status:str
   await pool.query('insert into sync_runs(installation_id,status,discovered,registered,error) values($1,$2,$3,$4,$5)',[installationId,error?'failed':'completed',results.length,results.filter(x=>x.status==='registered').length,error||null])
 }
 
-export async function recordAction(actionId:string,repository:string,workflow:string,inputs:Record<string,string>){
+export async function recordAction(actionId:string,repository:string,workflow:string,inputs:Record<string,string>,actor?:string,version?:number){
   if(!pool)return
-  await pool.query('insert into action_runs(action_id,repository,workflow,status,inputs) values($1,$2,$3,$4,$5)',[actionId,repository,workflow,'dispatched',inputs])
+  await pool.query('insert into action_runs(action_id,repository,workflow,status,inputs,actor_login,action_version) values($1,$2,$3,$4,$5,$6,$7)',[actionId,repository,workflow,'dispatched',inputs,actor||null,version||null])
 }

@@ -1,0 +1,10 @@
+apiVersion: northstar.dev/v1
+tools:
+  items:
+    - id: github
+      name: GitHub
+      description: Repositories, pull requests, and engineering collaboration.
+      iconUrl: ""
+      destinations:
+        - label: Open GitHub
+          url: https://github.com

@@ -1,8 +1,8 @@
-import { App } from '@octokit/app'
-import { readFileSync } from 'node:fs'
 import YAML from 'yaml'
 import { z } from 'zod'
-import { ensureTeam, recordSync, setTeamMembers, upsertService, upsertTeam, upsertUser } from './db.js'
+import { ensureTeam, recordSync, removeServiceByRepository, setTeamMembers, upsertService, upsertTeam, upsertUser } from './db.js'
+import { getConfig, isAdminLogin, scoreWithConfig } from './config.js'
+import { installationOctokit } from './github-app.js'
 
 export const metadataSchema = z.object({
   apiVersion: z.string(),
@@ -15,7 +15,7 @@ export const metadataSchema = z.object({
   }),
   spec: z.object({
     owner: z.string().min(1),
-    lifecycle: z.enum(['production','experimental','deprecated']),
+    lifecycle: z.string().min(1),
     system: z.string().optional(),
     language: z.string().optional(),
     links: z.array(z.object({ name:z.string(), url:z.string().url() })).optional()
@@ -25,23 +25,15 @@ export const metadataSchema = z.object({
 export const teamSchema=z.object({
   apiVersion:z.string(),kind:z.literal('Team'),
   metadata:z.object({name:z.string().min(1),title:z.string().min(1),description:z.string().default('')}),
-  spec:z.object({members:z.array(z.string().min(1)).default([])})
+  spec:z.object({members:z.array(z.string().min(1)).default([]),links:z.array(z.object({name:z.string().min(1),url:z.string().url()})).default([])})
 })
 
-function app() {
-  const { GITHUB_APP_ID, GITHUB_PRIVATE_KEY, GITHUB_WEBHOOK_SECRET, GITHUB_CLIENT_ID, GITHUB_CLIENT_SECRET } = process.env
-  const privateKey=GITHUB_PRIVATE_KEY||process.env.GITHUB_PRIVATE_KEY_PATH&&readFileSync(process.env.GITHUB_PRIVATE_KEY_PATH,'utf8')
-  if (!GITHUB_APP_ID || !privateKey) throw new Error('GitHub App is not configured')
-  return new App({ appId:GITHUB_APP_ID, privateKey:privateKey.replace(/\\n/g,'\n'), webhooks:{secret:GITHUB_WEBHOOK_SECRET || 'development'}, oauth:GITHUB_CLIENT_ID&&GITHUB_CLIENT_SECRET?{clientId:GITHUB_CLIENT_ID,clientSecret:GITHUB_CLIENT_SECRET}:undefined })
-}
-
 export function scoreMetadata(value:z.infer<typeof metadataSchema>) {
-  const checks = [Boolean(value.spec.owner), Boolean(value.spec.lifecycle), value.metadata.description.length>=20, Boolean(value.spec.system), Boolean(value.spec.links?.some(l=>l.name.toLowerCase().includes('doc')))]
-  return Math.round(checks.filter(Boolean).length / checks.length * 100)
+  return scoreWithConfig(value)
 }
 
 export async function syncInstallation(installationId:number) {
-  const octokit = await app().getInstallationOctokit(installationId)
+  const octokit = await installationOctokit(installationId)
   const repositories: Array<{owner:{login:string};name:string;full_name:string;language?:string|null}>=[]
   for(let page=1;;page++){
     const response=await octokit.request('GET /installation/repositories',{per_page:100,page})
@@ -52,9 +44,10 @@ export async function syncInstallation(installationId:number) {
   for (const repository of repositories) {
     const repo = repository
     try {
-      const contentResponse = await octokit.request('GET /repos/{owner}/{repo}/contents/{path}',{owner:repo.owner.login,repo:repo.name,path:'.portal/service.yaml'})
+      const contentResponse = await octokit.request('GET /repos/{owner}/{repo}/contents/{path}',{owner:repo.owner.login,repo:repo.name,path:getConfig().catalog.serviceMetadataPath})
       if (Array.isArray(contentResponse.data) || !('content' in contentResponse.data)) continue
       const parsed = metadataSchema.parse(YAML.parse(Buffer.from(contentResponse.data.content,'base64').toString('utf8')))
+      if(!getConfig().catalog.lifecycles.includes(parsed.spec.lifecycle))throw new Error(`Unsupported lifecycle: ${parsed.spec.lifecycle}`)
       const owner=parsed.spec.owner.replace(/^team:/,'')
       await ensureTeam(owner)
       await upsertService({name:parsed.metadata.name,description:parsed.metadata.description,owner,system:parsed.spec.system||'Unassigned',lifecycle:parsed.spec.lifecycle,language:parsed.spec.language||repo.language||'Unknown',repository:repo.full_name,metadata:parsed,score:scoreMetadata(parsed),installationId})
@@ -64,15 +57,15 @@ export async function syncInstallation(installationId:number) {
       results.push({repository:repo.full_name,status,error:status==='invalid'?(error as Error).message:undefined})
     }
     try{
-      const teamResponse=await octokit.request('GET /repos/{owner}/{repo}/contents/{path}',{owner:repo.owner.login,repo:repo.name,path:'.portal/team.yaml'})
+      const teamResponse=await octokit.request('GET /repos/{owner}/{repo}/contents/{path}',{owner:repo.owner.login,repo:repo.name,path:getConfig().catalog.teamMetadataPath})
       if(!Array.isArray(teamResponse.data)&&'content' in teamResponse.data){
         const teamData=teamSchema.parse(YAML.parse(Buffer.from(teamResponse.data.content,'base64').toString('utf8')))
-        const team=await upsertTeam({name:teamData.metadata.name,title:teamData.metadata.title,description:teamData.metadata.description})
+        const team=await upsertTeam({name:teamData.metadata.name,title:teamData.metadata.title,description:teamData.metadata.description,links:teamData.spec.links})
         const userIds=[]
         for(const login of teamData.spec.members){
           const response=await octokit.request('GET /users/{username}',{username:login})
           const profile=response.data
-          const user=await upsertUser({githubId:profile.id,login:profile.login,name:profile.name||profile.login,avatarUrl:profile.avatar_url,email:profile.email,bio:profile.bio,role:'member'}) as {id?:string}
+          const user=await upsertUser({githubId:profile.id,login:profile.login,name:profile.name||profile.login,avatarUrl:profile.avatar_url,email:profile.email,bio:profile.bio,role:isAdminLogin(profile.login)?'admin':'member'}) as {id?:string}
           if(user?.id)userIds.push(user.id)
         }
         if(team?.id)await setTeamMembers(team.id,userIds)
@@ -83,9 +76,30 @@ export async function syncInstallation(installationId:number) {
   return results
 }
 
+export async function syncRepository(installationId:number,owner:string,name:string){
+  const octokit=await installationOctokit(installationId)
+  const repository=(await octokit.request('GET /repos/{owner}/{repo}',{owner,repo:name})).data
+  const fullName=repository.full_name
+  let serviceStatus:'registered'|'unregistered'|'invalid'='unregistered';let error:string|undefined
+  try{
+    const response=await octokit.request('GET /repos/{owner}/{repo}/contents/{path}',{owner,repo:name,path:getConfig().catalog.serviceMetadataPath})
+    if(Array.isArray(response.data)||!('content' in response.data))throw Object.assign(new Error('Metadata path is not a file'),{status:422})
+    const parsed=metadataSchema.parse(YAML.parse(Buffer.from(response.data.content,'base64').toString('utf8')))
+    if(!getConfig().catalog.lifecycles.includes(parsed.spec.lifecycle))throw new Error(`Unsupported lifecycle: ${parsed.spec.lifecycle}`)
+    const team=parsed.spec.owner.replace(/^team:/,'');await ensureTeam(team)
+    await upsertService({name:parsed.metadata.name,description:parsed.metadata.description,owner:team,system:parsed.spec.system||'Unassigned',lifecycle:parsed.spec.lifecycle,language:parsed.spec.language||repository.language||'Unknown',repository:fullName,metadata:parsed,score:scoreMetadata(parsed),installationId})
+    serviceStatus='registered'
+  }catch(e){if((e as {status?:number}).status===404){await removeServiceByRepository(fullName);serviceStatus='unregistered'}else{serviceStatus='invalid';error=(e as Error).message}}
+  try{
+    const response=await octokit.request('GET /repos/{owner}/{repo}/contents/{path}',{owner,repo:name,path:getConfig().catalog.teamMetadataPath})
+    if(!Array.isArray(response.data)&&'content' in response.data){const parsed=teamSchema.parse(YAML.parse(Buffer.from(response.data.content,'base64').toString('utf8')));const team=await upsertTeam({name:parsed.metadata.name,title:parsed.metadata.title,description:parsed.metadata.description,links:parsed.spec.links});const ids=[];for(const login of parsed.spec.members){const profile=(await octokit.request('GET /users/{username}',{username:login})).data;const user=await upsertUser({githubId:profile.id,login:profile.login,name:profile.name||profile.login,avatarUrl:profile.avatar_url,email:profile.email,bio:profile.bio,role:isAdminLogin(profile.login)?'admin':'member'}) as {id?:string};if(user?.id)ids.push(user.id)}if(team?.id)await setTeamMembers(team.id,ids)}
+  }catch(e){if((e as {status?:number}).status!==404){serviceStatus='invalid';error=`team metadata: ${(e as Error).message}`}}
+  return{repository:fullName,status:serviceStatus,error}
+}
+
 export async function dispatchWorkflow(installationId:number, repository:string, workflow:string, inputs:Record<string,string>) {
   const [owner,repo]=repository.split('/')
   if (!owner||!repo) throw new Error('Repository must use owner/name format')
-  const octokit=await app().getInstallationOctokit(installationId)
+  const octokit=await installationOctokit(installationId)
   await octokit.request('POST /repos/{owner}/{repo}/actions/workflows/{workflow_id}/dispatches',{owner,repo,workflow_id:workflow,ref:'main',inputs})
 }

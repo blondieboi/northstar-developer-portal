@@ -23,6 +23,7 @@ create table if not exists teams (
 );
 
 alter table teams add column if not exists description text not null default '';
+alter table teams add column if not exists links jsonb not null default '[]'::jsonb;
 
 create table if not exists users (
   id bigserial primary key,
@@ -36,6 +37,7 @@ create table if not exists users (
   last_seen_at timestamptz not null default now(),
   created_at timestamptz not null default now()
 );
+alter table users add column if not exists primary_team text;
 
 create table if not exists team_members (
   team_id bigint not null references teams(id) on delete cascade,
@@ -60,5 +62,45 @@ create table if not exists action_runs (
   workflow text not null,
   status text not null default 'queued',
   inputs jsonb not null default '{}'::jsonb,
+  created_at timestamptz not null default now()
+);
+alter table action_runs add column if not exists actor_login text;
+alter table action_runs add column if not exists action_version integer;
+
+create table if not exists config_overrides (section text primary key, value jsonb not null, updated_by text not null, updated_at timestamptz not null default now());
+create table if not exists config_revisions (id bigserial primary key, section text not null, value jsonb, actor_login text not null, action text not null, created_at timestamptz not null default now());
+create table if not exists audit_events (id bigserial primary key, category text not null, action text not null, actor_login text not null, target text, before_value jsonb, after_value jsonb, created_at timestamptz not null default now());
+
+create table if not exists config_state (
+  id integer primary key default 1 check (id = 1),
+  observed_sha text,
+  applied_sha text,
+  config jsonb,
+  file_shas jsonb not null default '{}'::jsonb,
+  status text not null default 'unavailable',
+  error text,
+  synced_at timestamptz,
+  applied_at timestamptz
+);
+
+create table if not exists config_sync_events (
+  id bigserial primary key,
+  observed_sha text,
+  applied_sha text,
+  status text not null,
+  actor_login text not null,
+  error text,
+  created_at timestamptz not null default now()
+);
+
+create table if not exists webhook_deliveries (
+  id bigserial primary key,
+  delivery_id text not null unique,
+  event text not null,
+  action text,
+  repository text,
+  installation_id bigint,
+  status text not null,
+  message text,
   created_at timestamptz not null default now()
 );

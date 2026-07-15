@@ -1,6 +1,7 @@
 import { createHmac, randomBytes, timingSafeEqual } from 'node:crypto'
 import type { FastifyReply, FastifyRequest } from 'fastify'
-import { upsertUser } from './db.js'
+import { findUser, upsertUser } from './db.js'
+import { isAdminLogin } from './config.js'
 
 export type SessionUser={id:number;login:string;name:string;avatarUrl:string;role:'admin'|'member'}
 const secret=()=>process.env.SESSION_SECRET||process.env.GITHUB_CLIENT_SECRET||'northstar-development-only'
@@ -9,21 +10,19 @@ const encode=(value:unknown)=>{const payload=Buffer.from(JSON.stringify(value)).
 const decode=<T>(value?:string):T|null=>{if(!value)return null;const [payload,signature]=value.split('.');if(!payload||!signature)return null;const expected=sign(payload);if(signature.length!==expected.length||!timingSafeEqual(Buffer.from(signature),Buffer.from(expected)))return null;try{return JSON.parse(Buffer.from(payload,'base64url').toString()) as T}catch{return null}}
 const cookie=(request:FastifyRequest,name:string)=>request.headers.cookie?.split(';').map(x=>x.trim()).find(x=>x.startsWith(`${name}=`))?.slice(name.length+1)
 const cookieFlags=()=>`Path=/; HttpOnly; SameSite=Lax; Max-Age=28800${process.env.NODE_ENV==='production'?'; Secure':''}`
+export const oauthCallbackUrl=()=>`${(process.env.PUBLIC_URL||'http://localhost:4000').replace(/\/$/,'')}/api/auth/callback`
+export const frontendUrl=()=>`${(process.env.APP_URL||process.env.PUBLIC_URL||'http://localhost:4000').replace(/\/$/,'')}/`
 
-export function currentUser(request:FastifyRequest){return decode<SessionUser>(cookie(request,'northstar_session'))}
-export function requireAdmin(request:FastifyRequest,reply:FastifyReply,done:()=>void){
-  const user=currentUser(request)
-  if(!user)return void reply.code(401).send({error:'Sign in with GitHub to continue'})
-  if(user.role!=='admin')return void reply.code(403).send({error:'Administrator access is required'})
-  done()
-}
+export async function currentUser(request:FastifyRequest){const session=decode<SessionUser>(cookie(request,'northstar_session'));if(!session)return null;const stored=await findUser(session.login);return{...session,role:isAdminLogin(session.login)?'admin':'member',primaryTeam:stored?.primary_team as string|null}}
+export async function requireUser(request:FastifyRequest,reply:FastifyReply){if(!await currentUser(request))return reply.code(401).send({error:'Sign in with GitHub to continue'})}
+export async function requireAdmin(request:FastifyRequest,reply:FastifyReply){const user=await currentUser(request);if(!user)return reply.code(401).send({error:'Sign in with GitHub to continue'});if(user.role!=='admin')return reply.code(403).send({error:'Administrator access is required'})}
 
 export function beginLogin(reply:FastifyReply){
   const clientId=process.env.GITHUB_CLIENT_ID
   if(!clientId)return reply.code(503).send({error:'GitHub OAuth is not configured'})
   const state=randomBytes(24).toString('base64url')
   reply.header('set-cookie',`northstar_oauth_state=${encode({state,created:Date.now()})}; ${cookieFlags()}`)
-  const params=new URLSearchParams({client_id:clientId,state,redirect_uri:`${process.env.PUBLIC_URL||'http://localhost:4000'}/api/auth/callback`})
+  const params=new URLSearchParams({client_id:clientId,state,redirect_uri:oauthCallbackUrl()})
   return reply.redirect(`https://github.com/login/oauth/authorize?${params}`)
 }
 
@@ -37,11 +36,10 @@ export async function finishLogin(request:FastifyRequest<{Querystring:{code?:str
   if(!token.access_token)return reply.code(401).send({error:token.error_description||'GitHub authorization failed'})
   const userResponse=await fetch('https://api.github.com/user',{headers:{authorization:`Bearer ${token.access_token}`,accept:'application/vnd.github+json','user-agent':'northstar-portal'}})
   const profile=await userResponse.json() as {id:number;login:string;name?:string|null;avatar_url:string;email?:string|null;bio?:string|null}
-  const admins=(process.env.GITHUB_ADMIN_LOGINS||'').split(',').map(x=>x.trim().toLowerCase()).filter(Boolean)
-  const user:SessionUser={id:profile.id,login:profile.login,name:profile.name||profile.login,avatarUrl:profile.avatar_url,role:admins.length===0||admins.includes(profile.login.toLowerCase())?'admin':'member'}
+  const user:SessionUser={id:profile.id,login:profile.login,name:profile.name||profile.login,avatarUrl:profile.avatar_url,role:isAdminLogin(profile.login)?'admin':'member'}
   await upsertUser({githubId:profile.id,login:profile.login,name:user.name,avatarUrl:user.avatarUrl,email:profile.email,bio:profile.bio,role:user.role})
   reply.header('set-cookie',`northstar_session=${encode(user)}; ${cookieFlags()}`)
-  return reply.redirect('/')
+  return reply.redirect(frontendUrl())
 }
 
 export function logout(reply:FastifyReply){reply.header('set-cookie','northstar_session=; Path=/; HttpOnly; SameSite=Lax; Max-Age=0');return {status:'signed_out'}}

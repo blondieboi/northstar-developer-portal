@@ -1,5 +1,5 @@
 {
-  "name": "northstar-developer-portal",
+  "name": "perongen-developer-portal",
   "private": true,
   "version": "0.1.0",
   "type": "module",
@@ -8,33 +8,38 @@
     "dev:api": "node --env-file-if-exists=.env --import tsx --watch server/index.ts",
     "build": "tsc -b && vite build",
     "start": "node --env-file-if-exists=.env --import tsx server/index.ts",
+    "config:export": "node --env-file-if-exists=.env --import tsx server/config-export.ts",
+    "docs:dev": "vitepress dev docs",
+    "docs:build": "vitepress build docs",
+    "docs:preview": "vitepress preview docs",
     "preview": "vite preview --host 0.0.0.0",
     "check": "tsc -b && tsc -p server/tsconfig.json --noEmit",
     "test": "vitest run"
   },
   "dependencies": {
-    "@vitejs/plugin-react": "latest",
-    "vite": "latest",
-    "typescript": "latest",
-    "react": "latest",
-    "react-dom": "latest",
-    "lucide-react": "latest",
-    "fastify": "latest",
     "@fastify/cors": "latest",
     "@fastify/static": "latest",
     "@octokit/app": "latest",
     "@octokit/rest": "latest",
+    "@vitejs/plugin-react": "latest",
+    "fastify": "latest",
+    "lucide-react": "latest",
     "pg": "latest",
+    "react": "latest",
+    "react-dom": "latest",
+    "tsx": "latest",
+    "typescript": "latest",
+    "vite": "latest",
     "yaml": "latest",
-    "zod": "latest",
-    "tsx": "latest"
+    "zod": "latest"
   },
   "devDependencies": {
-    "@types/react": "latest",
-    "@types/react-dom": "latest",
     "@types/node": "latest",
     "@types/pg": "latest",
-    "vitest": "latest",
-    "pg-mem": "latest"
+    "@types/react": "latest",
+    "@types/react-dom": "latest",
+    "pg-mem": "latest",
+    "vitepress": "1.6.4",
+    "vitest": "latest"
   }
 }

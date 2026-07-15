@@ -1,0 +1,4 @@
+apiVersion: northstar.dev/v1
+access:
+  admins:
+    - your-github-login
