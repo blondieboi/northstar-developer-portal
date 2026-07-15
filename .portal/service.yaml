@@ -11,6 +11,7 @@ spec:
   owner: team:platform
   lifecycle: production
   tier: tier-2
+  type: portal
   system: developer-experience
   language: TypeScript
   links:
