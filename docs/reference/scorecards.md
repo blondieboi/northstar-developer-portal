@@ -15,6 +15,7 @@ scorecards:
       weight: 1
       severity: recommended
       enabled: true
+      tiers: [critical, high]
 ```
 
 ## Rule fields
@@ -30,6 +31,7 @@ scorecards:
 | `weight` | Yes | Positive number; defaults to `1` |
 | `severity` | Yes | `required` or `recommended` |
 | `enabled` | Yes | Defaults to `true` |
+| `tiers` | No | Non-empty list of configured tier IDs; omission means all services |
 
 ## Operators
 
@@ -66,3 +68,22 @@ scorecards:
 ```
 
 Weights normalize across enabled rules. Disabling a rule removes its weight from both the numerator and denominator.
+
+## Tier-scoped checks
+
+Add `tiers` when a check should apply only to particular service criticalities:
+
+```yaml
+- id: runbook
+  title: Incident runbook exists
+  description: Higher-impact services need an operating procedure
+  path: spec.links
+  operator: contains
+  value: runbook
+  tiers: [critical, high]
+  weight: 2
+  severity: required
+  enabled: true
+```
+
+Rules without `tiers` remain global, including for services that have not declared a tier. For each service, weights normalize only across applicable rules. Aggregate rule results use only eligible services as their denominator; a rule with no eligible services is shown as not applicable rather than failing.

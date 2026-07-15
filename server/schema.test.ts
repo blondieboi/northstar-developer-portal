@@ -20,5 +20,6 @@ describe('database schema',()=>{
     for(const table of ['teams','users','team_members','sync_runs','action_runs','config_state','config_sync_events'])expect(db.public.getTable(table)).toBeTruthy()
     expect(Array.from(db.public.getTable('teams').getColumns()).some(column=>column.name==='links')).toBe(true)
     expect(Array.from(db.public.getTable('users').getColumns()).some(column=>column.name==='primary_team')).toBe(true)
+    expect(Array.from(db.public.getTable('services').getColumns()).some(column=>column.name==='tier')).toBe(true)
   })
 })

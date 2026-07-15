@@ -9,10 +9,12 @@ Open **Scorecards** to compare the current service scores. A service dossier sho
 The score is calculated as:
 
 ```text
-weight of passing enabled rules ÷ weight of all enabled rules × 100
+weight of passing applicable rules ÷ weight of all applicable rules × 100
 ```
 
 If there are no enabled rules, the service score is 100.
+
+Rules may target configured service tiers. A critical-service runbook check, for example, is excluded from standard and low-tier service scores. The Scorecards page shows each rule's scope and counts only eligible services in its pass rate.
 
 ## Required and recommended rules
 

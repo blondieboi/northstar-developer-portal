@@ -19,12 +19,12 @@ export async function listServices() {
 
 export async function upsertService(service: Record<string, unknown>) {
   if (!pool) return service
-  const values = [service.name, service.description, service.owner, service.system, service.lifecycle, service.language, service.repository, service.metadata, service.score, service.installationId]
+  const values = [service.name, service.description, service.owner, service.system, service.lifecycle, service.tier, service.language, service.repository, service.metadata, service.score, service.installationId]
   const { rows } = await pool.query(`
-    insert into services (name, description, owner, system, lifecycle, language, repository, metadata, score, installation_id)
-    values ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10)
+    insert into services (name, description, owner, system, lifecycle, tier, language, repository, metadata, score, installation_id)
+    values ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11)
     on conflict (name) do update set description=excluded.description, owner=excluded.owner,
-      system=excluded.system, lifecycle=excluded.lifecycle, language=excluded.language,
+      system=excluded.system, lifecycle=excluded.lifecycle, tier=excluded.tier, language=excluded.language,
       repository=excluded.repository, metadata=excluded.metadata, score=excluded.score,
       installation_id=excluded.installation_id, updated_at=now()
     returning *`, values)

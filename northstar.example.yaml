@@ -9,6 +9,19 @@ catalog:
   serviceMetadataPath: .portal/service.yaml
   teamMetadataPath: .portal/team.yaml
   lifecycles: [production, experimental, deprecated]
+  tiers:
+    - id: critical
+      title: Critical
+      description: Customer-facing or business-critical services
+    - id: high
+      title: High
+      description: Important services with significant operational impact
+    - id: standard
+      title: Standard
+      description: Normal production services
+    - id: low
+      title: Low
+      description: Low-impact or internal services
   installationId: null
 scorecards:
   rules: []

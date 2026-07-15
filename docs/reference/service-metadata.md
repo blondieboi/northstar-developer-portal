@@ -13,10 +13,10 @@ metadata:
   description: Core checkout orchestration and payment routing.
   tags:
     - payments
-    - tier-1
 spec:
   owner: team:checkout
   lifecycle: production
+  tier: critical
   system: commerce
   language: TypeScript
   links:
@@ -38,6 +38,7 @@ spec:
 | `metadata.tags` | No | Array of strings retained in stored metadata |
 | `spec.owner` | Yes | Non-empty owner; `team:<name>` connects to team metadata |
 | `spec.lifecycle` | Yes | Must also appear in configured catalog lifecycles |
+| `spec.tier` | No | Stable ID from the configured catalog tiers |
 | `spec.system` | No | Defaults to `Unassigned` in catalog views |
 | `spec.language` | No | Falls back to the repository language, then `Unknown` |
 | `spec.links` | No | Array of name and valid URL pairs |
@@ -57,6 +58,17 @@ Perongen removes the `team:` prefix for its stored ownership key. If team metada
 
 The schema accepts a non-empty lifecycle string, but ingestion also checks the portal's configured lifecycle list. Add a new lifecycle to `catalog.yaml` before using it in service metadata.
 
+## Service tier
+
+Tier identifies operational criticality independently of lifecycle. Configure the available tiers in `catalog.yaml`, then reference the stable ID:
+
+```yaml
+spec:
+  tier: critical
+```
+
+The field is optional so existing services continue to synchronize. Administrators can enforce adoption with a global scorecard rule that checks whether `spec.tier` is present. When supplied, the tier must match the active catalog configuration.
+
 ## Scorecard paths
 
-Scorecards evaluate the parsed document using dotted paths such as `metadata.description`, `spec.owner`, or `spec.links`. Keep field names stable when rules depend on them.
+Scorecards evaluate the parsed document using dotted paths such as `metadata.description`, `spec.owner`, `spec.tier`, or `spec.links`. Keep field names stable when rules depend on them.

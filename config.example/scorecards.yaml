@@ -1,3 +1,21 @@
 apiVersion: northstar.dev/v1
 scorecards:
-  rules: []
+  rules:
+    - id: tier
+      title: Service tier is declared
+      description: Operational criticality is explicit
+      path: spec.tier
+      operator: present
+      weight: 1
+      severity: required
+      enabled: true
+    - id: critical-docs
+      title: Critical services have documentation
+      description: Documentation is required for higher-impact services
+      path: spec.links
+      operator: contains
+      value: documentation
+      weight: 2
+      severity: required
+      enabled: true
+      tiers: [critical, high]
