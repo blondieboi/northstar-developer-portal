@@ -29,7 +29,7 @@ Perongen reads its canonical non-secret configuration from seven validated YAML 
 
 Administrators edit configuration through **Settings** without writing YAML. Each draft is validated and previews the YAML files and line counts that will change. Saves use optimistic blob-SHA conflict protection, and related multi-file updates are committed atomically. Valid external commits are applied through Push webhooks; a 60-second server poll recovers missed deliveries, and open browsers check the applied revision every 15 seconds. PostgreSQL stores the last-known-good revision so reads remain available during GitHub outages, while writes are disabled until synchronization recovers.
 
-The control plane manages portal identity, catalog ingestion, named weighted scorecards, built-in integration plugins, published GitHub workflow actions, user roles, provider health, and audit history. Database credentials, OAuth secrets, GitHub private keys, session secrets, and webhook secrets remain deployment-only and are never returned by the API.
+The control plane manages portal identity, catalog ingestion, named weighted scorecards, built-in integration plugins, published GitHub workflow actions, user roles, provider health, and audit history. Application Intake finds installed repositories that are not yet catalogued, derives evidence-backed metadata suggestions, requires confirmation of risk facts, and opens the repository-owned onboarding file as a pull request. Database credentials, OAuth secrets, GitHub private keys, session secrets, and webhook secrets remain deployment-only and are never returned by the API.
 
 Scorecards, plugins, and workflow actions use visual builders. GitHub push and workflow-run deliveries are HMAC-verified and trigger configuration, metadata, or plugin-data synchronization. Delivery outcomes appear under **Settings → Integrations**.
 
@@ -131,6 +131,7 @@ spec:
 - Portal effectiveness analytics for adoption, search gaps, actions, and campaign outcomes
 - GitHub App installation-token authentication
 - Repository discovery and `.portal/service.yaml` ingestion
+- Evidence-backed Application Intake for uncatalogued repositories with reviewed onboarding pull requests
 - Team and people directories from `.portal/team.yaml` and GitHub profiles
 - PostgreSQL catalog persistence
 - Metadata and plugin scorecard evaluation during sync and provider refresh

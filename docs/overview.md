@@ -20,6 +20,7 @@ It reads explicit metadata from installed GitHub repositories. It does not inven
 | Actions           | Published GitHub workflow forms and dispatch history                                      | Portal configuration and GitHub Actions                  |
 | Tools             | Shared engineering destinations                                                           | Portal configuration                                     |
 | Control plane     | Identity, ingestion, standards, plugins, actions, tools, access, and audit history        | Git-backed configuration plus deployment secrets         |
+| Application intake | Evidence-backed discovery and reviewed onboarding pull requests                          | GitHub installation and repository contents              |
 | Campaigns         | Dry-run metadata patches, GitHub pull requests, rollout progress, retries, and exclusions | Catalog state plus repository branches and pull requests |
 | Analytics         | Adoption, failed searches, action usage, and remediation throughput                       | Privacy-conscious portal event records                   |
 
@@ -30,6 +31,7 @@ Service and team owners change metadata through the same review process they use
 ```text
 GitHub repository → metadata, relations, and docs → PostgreSQL catalog ─┐
 GitHub providers   → isolated operational snapshots ────────────────────┼→ portal views
+Application intake → reviewed onboarding pull requests ─────────────────┤
 Campaign preview   → reviewed GitHub pull requests ─────────────────────┘
 ```
 

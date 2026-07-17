@@ -67,6 +67,7 @@ export default defineConfig({
           { text: "Deploy Perongen", link: "/admin/deployment" },
           { text: "Connect GitHub", link: "/admin/github" },
           { text: "Synchronize the catalog", link: "/admin/catalog" },
+          { text: "Application intake", link: "/admin/application-intake" },
           { text: "Control plane", link: "/admin/control-plane" },
           { text: "Integration plugins", link: "/admin/plugins" },
           { text: "Metadata campaigns", link: "/admin/campaigns" },

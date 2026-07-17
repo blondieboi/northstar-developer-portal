@@ -16,6 +16,7 @@ Perongen uses one stable navigation model on desktop and mobile. The available d
 | Teams         | Browse ownership groups and their services                                                           |
 | People        | Find GitHub identities and team memberships                                                          |
 | Settings      | Administer the portal, including integration plugins; visible only to administrators                 |
+| Application intake | Discover uncatalogued GitHub repositories and open reviewed onboarding pull requests; administrators only |
 | Campaigns     | Preview and coordinate metadata changes through GitHub pull requests; visible only to administrators |
 | Analytics     | Measure adoption, discovery gaps, and remediation outcomes; visible only to administrators           |
 

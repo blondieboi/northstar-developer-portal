@@ -8,10 +8,10 @@ Create a GitHub App owned by the organization that owns the catalog repositories
 
 | Permission             | Access         | Purpose                                                                       |
 | ---------------------- | -------------- | ----------------------------------------------------------------------------- |
-| Contents               | Read and write | Read catalog metadata and commit canonical configuration                      |
+| Contents               | Read and write | Read catalog evidence and create configuration, onboarding, and remediation commits |
 | Metadata               | Read           | Discover installed repositories                                               |
 | Actions                | Write          | Read workflow activity and dispatch configured workflows                      |
-| Pull requests          | Read and write | Build review queues and open metadata campaign or standards-fix pull requests |
+| Pull requests          | Read and write | Build review queues and open onboarding, campaign, or standards-fix pull requests |
 | Issues                 | Read           | Measure maintenance backlog and issue freshness                               |
 | Deployments            | Read           | Read environment deployment status                                            |
 | Administration         | Read           | Inspect default-branch protection                                             |

@@ -94,6 +94,12 @@ import {
   valueAtPath,
 } from "./platform.js";
 import { backfillServiceDocuments } from "./documents.js";
+import {
+  discoverIntakeCandidates,
+  intakePreview,
+  openIntakePullRequest,
+  type IntakeDraft,
+} from "./intake.js";
 
 const server = Fastify({ logger: true });
 async function reconcileCampaignStatus(id: string | number) {
@@ -577,6 +583,79 @@ server.post<{ Body?: { installationId?: number } }>(
       registered: results.filter((x) => x.status === "registered").length,
       unregistered: results.filter((x) => x.status === "unregistered").length,
     };
+  },
+);
+server.get(
+  "/api/admin/intake",
+  { preHandler: requireAdmin },
+  async (_request, reply) => {
+    const installationId = Number(
+      getConfig().catalog.installationId || process.env.GITHUB_INSTALLATION_ID,
+    );
+    if (!Number.isInteger(installationId) || installationId <= 0)
+      return reply.code(400).send({ error: "GitHub installation ID is not configured" });
+    try {
+      const [services, teams] = await Promise.all([listServices(), listTeams()]);
+      const candidates = await discoverIntakeCandidates(
+        installationId,
+        (services || []).map((service: any) => service.repository),
+      );
+      return {
+        candidates,
+        installationId,
+        metadataPath: getConfig().catalog.serviceMetadataPath,
+        teams: (teams || []).map((team: any) => ({ name: team.name, title: team.title })),
+        catalog: {
+          lifecycles: getConfig().catalog.lifecycles,
+          tiers: getConfig().catalog.tiers,
+          types: getConfig().catalog.types,
+        },
+      };
+    } catch (error) {
+      return reply.code(502).send({ error: `Repository discovery failed: ${(error as Error).message}` });
+    }
+  },
+);
+server.post<{ Body: { draft: IntakeDraft } }>(
+  "/api/admin/intake/preview",
+  { preHandler: requireAdmin },
+  async (request, reply) => {
+    try {
+      return intakePreview(request.body?.draft);
+    } catch (error) {
+      return reply.code(400).send({ error: (error as Error).message });
+    }
+  },
+);
+server.post<{ Body: { repository: string; draft: IntakeDraft } }>(
+  "/api/admin/intake/onboard",
+  { preHandler: requireAdmin },
+  async (request, reply) => {
+    const installationId = Number(
+      getConfig().catalog.installationId || process.env.GITHUB_INSTALLATION_ID,
+    );
+    if (!Number.isInteger(installationId) || installationId <= 0)
+      return reply.code(400).send({ error: "GitHub installation ID is not configured" });
+    try {
+      const user = await currentUser(request);
+      const pullRequest = await openIntakePullRequest({
+        installationId,
+        repository: request.body?.repository,
+        metadataPath: getConfig().catalog.serviceMetadataPath,
+        draft: request.body?.draft,
+        actor: user!.login,
+      });
+      await recordPortalEvent({
+        eventType: "application-intake.pull-request",
+        actorLogin: user!.login,
+        entityKind: "repository",
+        entityKey: request.body.repository,
+        properties: { pullRequest: pullRequest.number, alreadyCataloged: pullRequest.alreadyCataloged },
+      });
+      return reply.code(pullRequest.alreadyCataloged ? 200 : 201).send({ pullRequest });
+    } catch (error) {
+      return reply.code(400).send({ error: (error as Error).message });
+    }
   },
 );
 server.post<{ Body: { actionId: string; inputs?: Record<string, string> } }>(

@@ -24,6 +24,7 @@ import {
   PanelLeftClose,
   PanelLeftOpen,
   Plus,
+  Radar,
   Search,
   Settings,
   ShieldCheck,
@@ -56,6 +57,7 @@ import { StandardsChecks } from "./StandardsRemediation";
 import { LifecycleGuardrails } from "./LifecycleGuardrails";
 import { riskProfile } from "./governance";
 import { AnalyticsPage, CampaignsPage } from "./AdminPlatform";
+import { ApplicationIntake } from "./ApplicationIntake";
 import { trackPortalEvent } from "./telemetry";
 
 type View =
@@ -72,6 +74,7 @@ type View =
   | "teams"
   | "people"
   | "integrations"
+  | "intake"
   | "campaigns"
   | "analytics"
   | "settings";
@@ -481,6 +484,14 @@ function Sidebar({
             >
               <Settings size={18} />
               <span>Settings</span>
+            </button>
+            <button
+              title={collapsed ? "Application intake" : undefined}
+              className={view === "intake" ? "nav-link active" : "nav-link"}
+              onClick={() => go("intake")}
+            >
+              <Radar size={18} />
+              <span>Application intake</span>
             </button>
             <button
               title={collapsed ? "Campaigns" : undefined}
@@ -2284,7 +2295,7 @@ function Integrations({ refresh }: { refresh: () => void }) {
           <div className="permission-row">
             <span>
               <Check size={14} />
-              Contents: read
+              Contents: read and write
             </span>
             <span>
               <Check size={14} />
@@ -2293,6 +2304,10 @@ function Integrations({ refresh }: { refresh: () => void }) {
             <span>
               <Check size={14} />
               Metadata: read
+            </span>
+            <span>
+              <Check size={14} />
+              Pull requests: read and write
             </span>
           </div>
         </div>
@@ -2313,6 +2328,7 @@ const routeForView: Record<Exclude<View, "service" | "team">, string> = {
   teams: "/teams",
   people: "/people",
   integrations: "/integrations",
+  intake: "/intake",
   campaigns: "/campaigns",
   analytics: "/analytics",
   settings: "/settings",
@@ -2375,6 +2391,7 @@ export function App() {
     teams: "Teams",
     people: "People",
     integrations: "Integrations",
+    intake: "Application intake",
     campaigns: "Metadata campaigns",
     analytics: "Portal analytics",
     settings: "Settings",
@@ -2667,6 +2684,8 @@ export function App() {
           <PeoplePage users={data.users} />
         ) : view === "settings" && user?.role === "admin" ? (
           <VisualSettings onRefresh={refresh} />
+        ) : view === "intake" && user?.role === "admin" ? (
+          <ApplicationIntake />
         ) : view === "campaigns" && user?.role === "admin" ? (
           <CampaignsPage
             services={data.services}
