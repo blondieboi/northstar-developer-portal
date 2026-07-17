@@ -1,6 +1,6 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
-import { defaults, serializeSection, type ConfigSection } from './config.js'
-import { commitSection, ConfigConflictError, configDirectoryChanged, configPushMatches, getConfigSource, initializeGitConfig, resetGitConfigForTests, setGitConfigOctokitFactoryForTests, syncGitConfig } from './git-config.js'
+import { configSections, defaults, serializeSection, type ConfigSection } from './config.js'
+import { commitIntegrations, commitSection, ConfigConflictError, configDirectoryChanged, configPushMatches, getConfigSource, initializeGitConfig, resetGitConfigForTests, setGitConfigOctokitFactoryForTests, syncGitConfig } from './git-config.js'
 
 const saved={...process.env}
 describe('Git configuration push routing',()=>{
@@ -58,5 +58,44 @@ describe('Git configuration push routing',()=>{
     await commitSection('integrations',defaults.integrations,undefined,{login:'admin',id:1,name:'Admin'})
     expect(created).toBe(true)
     expect(getConfigSource().files.integrations?.sha).toBe('with-integrations-integrations')
+  })
+  it('commits a plugin default scorecard before enabling its integration',async()=>{
+    let revision=0
+    const documents=Object.fromEntries(configSections.map(section=>[section,serializeSection(section,defaults[section])])) as Record<ConfigSection,string>
+    const blobShas=Object.fromEntries(configSections.map(section=>[section,`base-${section}`])) as Record<ConfigSection,string>
+    const writes:string[]=[]
+    const request=vi.fn(async(route:string,params:any)=>{
+      if(route.includes('/git/ref/'))return{data:{object:{sha:`revision-${revision}`}}}
+      const section=String(params.path).split('/').pop()!.replace('.yaml','') as ConfigSection
+      if(route.startsWith('PUT')){
+        documents[section]=Buffer.from(params.content,'base64').toString('utf8');writes.push(section);revision+=1;blobShas[section]=`blob-${revision}-${section}`
+        return{data:{commit:{sha:`revision-${revision}`}}}
+      }
+      return{data:{type:'file',sha:blobShas[section],content:Buffer.from(documents[section]).toString('base64')}}
+    })
+    setGitConfigOctokitFactoryForTests((async()=>({request})) as any)
+    await initializeGitConfig(async()=>{})
+    await commitIntegrations({plugins:[{id:'github-repository-standards',enabled:true,config:{}}]},'base-integrations',{login:'admin',id:1,name:'Admin'})
+    expect(writes).toEqual(['scorecards','integrations'])
+    expect(documents.scorecards).toContain('id: repository-standards')
+    expect(documents.integrations).toContain('id: github-repository-standards')
+  })
+  it('backfills the scorecard without rewriting an already-enabled integration',async()=>{
+    let revision=0
+    const enabled={plugins:[{id:'github-repository-standards',enabled:true,config:{}}]}
+    const documents=Object.fromEntries(configSections.map(section=>[section,serializeSection(section,section==='integrations'?enabled:defaults[section])])) as Record<ConfigSection,string>
+    const blobShas=Object.fromEntries(configSections.map(section=>[section,`base-${section}`])) as Record<ConfigSection,string>
+    const writes:string[]=[]
+    const request=vi.fn(async(route:string,params:any)=>{
+      if(route.includes('/git/ref/'))return{data:{object:{sha:`revision-${revision}`}}}
+      const section=String(params.path).split('/').pop()!.replace('.yaml','') as ConfigSection
+      if(route.startsWith('PUT')){documents[section]=Buffer.from(params.content,'base64').toString('utf8');writes.push(section);revision+=1;blobShas[section]=`blob-${revision}-${section}`;return{data:{commit:{sha:`revision-${revision}`}}}}
+      return{data:{type:'file',sha:blobShas[section],content:Buffer.from(documents[section]).toString('base64')}}
+    })
+    setGitConfigOctokitFactoryForTests((async()=>({request})) as any)
+    await initializeGitConfig(async()=>{})
+    await commitIntegrations(enabled,'base-integrations',{login:'admin',id:1,name:'Admin'})
+    expect(writes).toEqual(['scorecards'])
+    expect(documents.scorecards).toContain('id: repository-standards')
   })
 })

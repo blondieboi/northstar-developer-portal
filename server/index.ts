@@ -61,6 +61,7 @@ import {
   verifyWebhookSignature,
 } from "./webhook.js";
 import {
+  commitIntegrations,
   commitSection,
   ConfigConflictError,
   ConfigUnavailableError,
@@ -335,7 +336,7 @@ server.post(
 server.get("/api/github/status", async () => ({
   configured: Boolean(
     process.env.GITHUB_APP_ID &&
-      (process.env.GITHUB_PRIVATE_KEY || process.env.GITHUB_PRIVATE_KEY_PATH),
+    (process.env.GITHUB_PRIVATE_KEY || process.env.GITHUB_PRIVATE_KEY_PATH),
   ),
   oauth: Boolean(
     process.env.GITHUB_CLIENT_ID && process.env.GITHUB_CLIENT_SECRET,
@@ -361,7 +362,7 @@ server.get("/api/onboarding", async () => {
     database: Boolean(process.env.DATABASE_URL),
     githubApp: Boolean(
       process.env.GITHUB_APP_ID &&
-        (process.env.GITHUB_PRIVATE_KEY || process.env.GITHUB_PRIVATE_KEY_PATH),
+      (process.env.GITHUB_PRIVATE_KEY || process.env.GITHUB_PRIVATE_KEY_PATH),
     ),
     oauth: Boolean(
       process.env.GITHUB_CLIENT_ID && process.env.GITHUB_CLIENT_SECRET,
@@ -369,9 +370,9 @@ server.get("/api/onboarding", async () => {
     webhookSecret: Boolean(process.env.GITHUB_WEBHOOK_SECRET),
     configRepository: Boolean(
       process.env.NORTHSTAR_CONFIG_REPOSITORY &&
-        process.env.NORTHSTAR_CONFIG_BRANCH &&
-        process.env.NORTHSTAR_CONFIG_DIRECTORY &&
-        process.env.NORTHSTAR_CONFIG_INSTALLATION_ID,
+      process.env.NORTHSTAR_CONFIG_BRANCH &&
+      process.env.NORTHSTAR_CONFIG_DIRECTORY &&
+      process.env.NORTHSTAR_CONFIG_INSTALLATION_ID,
     ),
     configRevision: configSource.status === "ready",
     administrator: Number(stats.users) > 0,
@@ -574,12 +575,20 @@ server.put<{
   async (request, reply) => {
     try {
       const user = await currentUser(request);
-      await commitSection(
-        request.params.section,
-        request.body?.value,
-        request.body?.expectedBlobSha,
-        { login: user!.login, id: user!.id, name: user!.name },
-      );
+      const actor = { login: user!.login, id: user!.id, name: user!.name };
+      if (request.params.section === "integrations")
+        await commitIntegrations(
+          request.body?.value,
+          request.body?.expectedBlobSha,
+          actor,
+        );
+      else
+        await commitSection(
+          request.params.section,
+          request.body?.value,
+          request.body?.expectedBlobSha,
+          actor,
+        );
       return configResponse();
     } catch (e) {
       return configError(reply, e);
@@ -688,11 +697,9 @@ server.post<{
   { preHandler: requireAdmin },
   async (request, reply) => {
     if (!validCampaignPath(request.body?.fieldPath))
-      return reply
-        .code(400)
-        .send({
-          error: "Metadata field must be a safe metadata.* or spec.* path",
-        });
+      return reply.code(400).send({
+        error: "Metadata field must be a safe metadata.* or spec.* path",
+      });
     if (
       request.body.strategy !== "infer" &&
       request.body.desiredValue === undefined
@@ -719,11 +726,9 @@ server.post<{
       !request.body?.title?.trim() ||
       !validCampaignPath(request.body?.fieldPath)
     )
-      return reply
-        .code(400)
-        .send({
-          error: "Campaign title and a safe metadata field are required",
-        });
+      return reply.code(400).send({
+        error: "Campaign title and a safe metadata field are required",
+      });
     if (
       request.body.strategy !== "infer" &&
       request.body.desiredValue === undefined

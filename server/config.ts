@@ -1,7 +1,7 @@
 import YAML from 'yaml'
 import { z } from 'zod'
 import { calculateScore, calculateScorecards, evaluateRule, valueAt } from '../src/scorecards.js'
-import { pluginById, validatePluginSettings } from './plugins/registry.js'
+import { pluginById, pluginManifests, validatePluginSettings } from './plugins/registry.js'
 
 const slug=z.string().regex(/^[a-z0-9]+(?:-[a-z0-9]+)*$/,'Must be a lowercase slug')
 export const tierSchema=z.object({id:slug,title:z.string().min(1),description:z.string().default('')}).strict()
@@ -70,6 +70,18 @@ export const defaults:PortalConfig={apiVersion:'northstar.dev/v1',general:{name:
   {id:'docs',title:'Documentation link exists',description:'Links contain documentation',path:'spec.links',operator:'contains',value:'documentation',weight:1,severity:'recommended',enabled:true}
 ]}]},actions:{definitions:[]},tools:{items:[{id:'github',name:'GitHub',description:'Repositories, pull requests, and engineering collaboration.',iconUrl:'',destinations:[{label:'Open GitHub',url:'https://github.com'}]}]},integrations:{plugins:[]},access:{admins:[]}}
 
+export function missingPluginScorecards(config:Pick<PortalConfig,'scorecards'|'integrations'>){
+  const enabled=new Set(config.integrations.plugins.filter(plugin=>plugin.enabled).map(plugin=>plugin.id))
+  const existing=new Set(config.scorecards.cards.map(card=>card.id))
+  const additions=[]
+  for(const manifest of pluginManifests){
+    if(!enabled.has(manifest.id))continue
+    for(const card of manifest.defaultScorecards||[]){
+      if(!existing.has(card.id)){additions.push(structuredClone(card));existing.add(card.id)}
+    }
+  }
+  return additions
+}
 let effective:PortalConfig=defaults
 export const getConfig=()=>effective
 export function activateConfig(value:unknown){effective=configSchema.parse(value);return effective}

@@ -1,4 +1,5 @@
 import { z } from "zod";
+import type { ScorecardDefinition } from "../../src/scorecards.js";
 import type { PortalPlugin } from "./contracts.js";
 
 const githubActionsConfig = z
@@ -22,6 +23,61 @@ const githubMaintenanceConfig = z
 const noConfig = z.object({}).strict();
 
 const githubEnvironment = ["GITHUB_APP_ID", "GITHUB_PRIVATE_KEY"];
+
+export const repositoryStandardsScorecard = {
+  id: "repository-standards",
+  title: "Repository standards",
+  description:
+    "Baseline ownership, documentation, policy, and default-branch safeguards collected from GitHub.",
+  enabled: true,
+  primary: false,
+  rules: [
+    ["codeowners", "CODEOWNERS is present", "checks.codeowners", "required"],
+    ["readme", "README is present", "checks.readme", "required"],
+    [
+      "branch-protection",
+      "Default branch is protected",
+      "checks.branchProtection",
+      "required",
+    ],
+    [
+      "security-policy",
+      "Security policy is present",
+      "checks.securityPolicy",
+      "required",
+    ],
+    [
+      "contributing",
+      "Contribution guide is present",
+      "checks.contributing",
+      "recommended",
+    ],
+    [
+      "issues",
+      "Issue tracking is enabled",
+      "checks.issuesEnabled",
+      "recommended",
+    ],
+    [
+      "description",
+      "Repository description is present",
+      "checks.description",
+      "recommended",
+    ],
+    ["topics", "Repository topics are present", "checks.topics", "recommended"],
+  ].map(([id, title, path, severity]) => ({
+    id,
+    title,
+    description: "Evaluated from the latest GitHub repository snapshot.",
+    source: { kind: "plugin" as const, plugin: "github-repository-standards" },
+    path,
+    operator: "equals" as const,
+    value: true,
+    weight: severity === "required" ? 2 : 1,
+    severity: severity as "required" | "recommended",
+    enabled: true,
+  })),
+} satisfies ScorecardDefinition;
 
 export const pluginManifests: PortalPlugin[] = [
   {
@@ -51,9 +107,10 @@ export const pluginManifests: PortalPlugin[] = [
     description:
       "CODEOWNERS, documentation, policy, and default-branch safeguards.",
     version: "1.0.0",
-    surfaces: ["service", "overview", "scorecards", "health"],
+    surfaces: ["overview", "scorecards", "health"],
     configSchema: noConfig,
     defaults: {},
+    defaultScorecards: [repositoryStandardsScorecard],
     requiredEnvironment: githubEnvironment,
   },
   {
@@ -102,7 +159,18 @@ export function validatePluginSettings(id: string, value: unknown) {
 
 export function publicPluginCatalog() {
   return pluginManifests.map(
-    ({ configSchema: _, collectService: __, registerRoutes: ___, ...plugin }) =>
-      plugin,
+    ({
+      configSchema: _,
+      collectService: __,
+      registerRoutes: ___,
+      defaultScorecards,
+      ...plugin
+    }) => ({
+      ...plugin,
+      defaultScorecards: defaultScorecards?.map(({ id, title }) => ({
+        id,
+        title,
+      })),
+    }),
   );
 }

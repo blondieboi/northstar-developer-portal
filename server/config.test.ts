@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest'
-import { activateConfig, assertAdministratorConfigured, configSections, defaults, evaluateRule, isAdminLogin, parseConfigDocuments, serializeSection, scoreWithConfig, validateConfig, validateSection } from './config.js'
+import { activateConfig, assertAdministratorConfigured, configSections, defaults, evaluateRule, isAdminLogin, missingPluginScorecards, parseConfigDocuments, serializeSection, scoreWithConfig, validateConfig, validateSection } from './config.js'
 
 describe('portal configuration',()=>{
   it('validates editable sections',()=>expect(validateSection('general',defaults.general)).toEqual(defaults.general))
@@ -50,6 +50,17 @@ describe('portal configuration',()=>{
     expect(()=>validateConfig({...configured,integrations:{plugins:[{id:'unknown',enabled:true,config:{}}]}})).toThrow('Unknown plugin')
     expect(()=>validateConfig({...configured,integrations:{plugins:[{id:'github-actions',enabled:true,config:{lookbackDays:0,maximumRuns:10}}]}})).toThrow()
     expect(()=>validateConfig({...configured,scorecards:{cards:[{...defaults.scorecards.cards[0],rules:[{...defaults.scorecards.cards[0].rules[0],source:{kind:'plugin',plugin:'unknown'}}]}]}})).toThrow('Unknown plugin')
+  })
+  it('provides the repository standards scorecard only when it is missing from an enabled plugin',()=>{
+    const enabled=validateConfig({...defaults,integrations:{plugins:[{id:'github-repository-standards',enabled:true,config:{}}]}})
+    const repositoryCard=missingPluginScorecards(enabled)[0]
+    expect(repositoryCard?.rules).toHaveLength(8)
+    expect(repositoryCard?.rules.every(rule=>rule.source?.kind==='plugin'&&rule.source.plugin==='github-repository-standards')).toBe(true)
+    expect(missingPluginScorecards(defaults)).toEqual([])
+    const custom={...repositoryCard,title:'Our repository policy',rules:[]}
+    const customized=validateConfig({...enabled,scorecards:{cards:[...defaults.scorecards.cards,custom]}})
+    expect(missingPluginScorecards(customized)).toEqual([])
+    expect(customized.scorecards.cards.find(card=>card.id==='repository-standards')?.title).toBe('Our repository policy')
   })
   it('validates remediation guidance and optional automatic fix values',()=>{
     const configured={...defaults,scorecards:{cards:[{...defaults.scorecards.cards[0],rules:[{...defaults.scorecards.cards[0].rules[0],remediation:{guidance:'Assign the accountable team.',docsUrl:'https://docs.example.com/ownership',suggestedValue:'team:platform'}}]}]}}

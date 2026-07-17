@@ -1,5 +1,5 @@
 import type { PortalConfig, ConfigSection } from './config.js'
-import { activateConfig, assertAdministratorConfigured, configSections, defaults, getBreakGlassAdmins, getConfig, parseConfigDocuments, serializeSection, validateConfig, validateSection } from './config.js'
+import { activateConfig, assertAdministratorConfigured, configSections, defaults, getBreakGlassAdmins, getConfig, missingPluginScorecards, parseConfigDocuments, serializeSection, validateConfig, validateSection } from './config.js'
 import { getConfigState, projectUserRoles, recordConfigSync, saveConfigState } from './db.js'
 import { installationOctokit } from './github-app.js'
 
@@ -119,6 +119,17 @@ export async function commitSection(section:ConfigSection,value:unknown,expected
     const commitSha=response.data.commit.sha;if(!commitSha)throw new Error('GitHub did not return a commit SHA')
     return syncGitConfig(actor.login,commitSha)
   }catch(error){if(error instanceof ConfigConflictError||(error as {status?:number}).status===409||String((error as Error).message).includes('does not match'))throw new ConfigConflictError(`${section}.yaml changed in GitHub; reload before saving`);await markWriteUnavailable(error,actor.login);throw new ConfigUnavailableError(`GitHub configuration write failed: ${(error as Error).message}`)}
+}
+
+export async function commitIntegrations(value:unknown,expectedBlobSha:string|undefined,actor:{login:string;id:number;name:string}){
+  const integrations=validateSection('integrations',value) as PortalConfig['integrations']
+  const current=getConfig();const integrationsChanged=JSON.stringify(integrations)!==JSON.stringify(current.integrations)
+  const additions=missingPluginScorecards({integrations,scorecards:current.scorecards})
+  let result:SyncResult|undefined
+  if(additions.length){
+    result=await commitSection('scorecards',{cards:[...current.scorecards.cards,...additions]},source.files.scorecards?.sha,actor)
+  }
+  return integrationsChanged?commitSection('integrations',integrations,expectedBlobSha,actor):result||{changed:[],source:getConfigSource()}
 }
 
 export function configPushMatches(payload:any){

@@ -71,15 +71,91 @@ scorecards:
           weight: 1
           severity: recommended
           enabled: true
-        - id: repository-standards
-          title: Repository standards are complete
-          description: Required repository safeguards and community files are present
-          source:
+    - id: repository-standards
+      title: Repository standards
+      description: Ownership, documentation, policy, and default-branch safeguards collected from GitHub
+      enabled: true
+      primary: false
+      rules:
+        - id: codeowners
+          title: CODEOWNERS is present
+          description: Evaluated from the latest GitHub repository snapshot
+          source: &repository-standards-source
             kind: plugin
             plugin: github-repository-standards
-          path: coverage
+          path: checks.codeowners
           operator: equals
-          value: 100
+          value: true
+          weight: 2
+          severity: required
+          enabled: true
+        - id: readme
+          title: README is present
+          description: Evaluated from the latest GitHub repository snapshot
+          source: *repository-standards-source
+          path: checks.readme
+          operator: equals
+          value: true
+          weight: 2
+          severity: required
+          enabled: true
+        - id: branch-protection
+          title: Default branch is protected
+          description: Evaluated from the latest GitHub repository snapshot
+          source: *repository-standards-source
+          path: checks.branchProtection
+          operator: equals
+          value: true
+          weight: 2
+          severity: required
+          enabled: true
+        - id: security-policy
+          title: Security policy is present
+          description: Evaluated from the latest GitHub repository snapshot
+          source: *repository-standards-source
+          path: checks.securityPolicy
+          operator: equals
+          value: true
+          weight: 2
+          severity: required
+          enabled: true
+        - id: contributing
+          title: Contribution guide is present
+          description: Evaluated from the latest GitHub repository snapshot
+          source: *repository-standards-source
+          path: checks.contributing
+          operator: equals
+          value: true
+          weight: 1
+          severity: recommended
+          enabled: true
+        - id: issues
+          title: Issue tracking is enabled
+          description: Evaluated from the latest GitHub repository snapshot
+          source: *repository-standards-source
+          path: checks.issuesEnabled
+          operator: equals
+          value: true
+          weight: 1
+          severity: recommended
+          enabled: true
+        - id: description
+          title: Repository description is present
+          description: Evaluated from the latest GitHub repository snapshot
+          source: *repository-standards-source
+          path: checks.description
+          operator: equals
+          value: true
+          weight: 1
+          severity: recommended
+          enabled: true
+        - id: topics
+          title: Repository topics are present
+          description: Evaluated from the latest GitHub repository snapshot
+          source: *repository-standards-source
+          path: checks.topics
+          operator: equals
+          value: true
           weight: 1
           severity: recommended
           enabled: true

@@ -5,7 +5,11 @@ import { collectGitHubPullRequests } from "./github-pull-requests.js";
 import { collectGitHubRepositoryStandards } from "./github-repository-standards.js";
 import { collectGitHubSecurity } from "./github-security.js";
 import { setSharedGitHubOctokitFactory } from "./github-shared.js";
-import { pluginManifests, validatePluginSettings } from "./registry.js";
+import {
+  pluginManifests,
+  repositoryStandardsScorecard,
+  validatePluginSettings,
+} from "./registry.js";
 
 const service = {
   id: 1,
@@ -36,6 +40,13 @@ describe("GitHub plugin suite", () => {
     expect(() =>
       validatePluginSettings("github-maintenance", { staleAfterDays: 0 }),
     ).toThrow();
+    const repositoryPlugin = pluginManifests.find(
+      (plugin) => plugin.id === "github-repository-standards",
+    );
+    expect(repositoryPlugin?.surfaces).not.toContain("service");
+    expect(repositoryPlugin?.defaultScorecards).toEqual([
+      repositoryStandardsScorecard,
+    ]);
   });
   it("normalizes pull-request attention signals", async () => {
     setSharedGitHubOctokitFactory((async () => ({

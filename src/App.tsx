@@ -1208,9 +1208,17 @@ function ServiceWorkspace({
   const links = Array.isArray(service.metadata?.spec?.links)
     ? service.metadata.spec.links
     : [];
-  const primary = cards.find((card) => card.primary) || cards[0];
-  const checks = primary
-    ? applicableRules(service.metadata, primary.rules, service.plugins)
+  const enabledCards = cards.filter((card) => card.enabled);
+  const primary = enabledCards.find((card) => card.primary) || enabledCards[0];
+  const [selectedScorecard, setSelectedScorecard] = useState(primary?.id || "");
+  useEffect(() => {
+    if (!enabledCards.some((card) => card.id === selectedScorecard))
+      setSelectedScorecard(primary?.id || enabledCards[0]?.id || "");
+  }, [cards, primary?.id, selectedScorecard]);
+  const activeScorecard =
+    enabledCards.find((card) => card.id === selectedScorecard) || primary;
+  const checks = activeScorecard
+    ? applicableRules(service.metadata, activeScorecard.rules, service.plugins)
     : [];
   const passing = checks.filter((check) =>
     evaluateRule(service.metadata, check, service.plugins),
@@ -1244,7 +1252,7 @@ function ServiceWorkspace({
     {
       id: "integrations",
       label: "Integrations",
-      note: `${plugins.length}`,
+      note: `${plugins.filter((plugin) => plugin.enabled && plugin.surfaces.includes("service")).length}`,
       Icon: Box,
     },
     {
@@ -1336,7 +1344,7 @@ function ServiceWorkspace({
               <div className="record-section-head">
                 <div>
                   <p className="eyebrow">STANDARDS</p>
-                  <h2>{primary?.title || "Scorecards"}</h2>
+                  <h2>{activeScorecard?.title || "Scorecards"}</h2>
                   <p>
                     {passing} of {checks.length} applicable checks passing
                   </p>
@@ -1348,23 +1356,28 @@ function ServiceWorkspace({
                   View all scorecards <ArrowRight size={14} />
                 </button>
               </div>
-              <div className="service-scorecard-strip">
-                {cards
-                  .filter((card) => card.enabled)
-                  .map((card) => (
-                    <span
-                      className={card.primary ? "primary" : ""}
-                      key={card.id}
-                    >
-                      <strong>{service.scorecards?.[card.id] ?? 100}</strong>
-                      <small>{card.title}</small>
-                    </span>
-                  ))}
+              <div
+                className="service-scorecard-strip"
+                role="tablist"
+                aria-label="Service scorecards"
+              >
+                {enabledCards.map((card) => (
+                  <button
+                    role="tab"
+                    aria-selected={card.id === activeScorecard?.id}
+                    className={`${card.primary ? "primary" : ""} ${card.id === activeScorecard?.id ? "active" : ""}`}
+                    onClick={() => setSelectedScorecard(card.id)}
+                    key={card.id}
+                  >
+                    <strong>{service.scorecards?.[card.id] ?? 100}</strong>
+                    <small>{card.title}</small>
+                  </button>
+                ))}
               </div>
               {checks.length ? (
                 <StandardsChecks
                   service={service}
-                  scorecardId={primary?.id || "metadata-quality"}
+                  scorecardId={activeScorecard?.id || "metadata-quality"}
                   checks={checks}
                   signedIn={signedIn}
                 />

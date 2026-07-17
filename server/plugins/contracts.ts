@@ -1,5 +1,6 @@
 import type { FastifyInstance } from "fastify";
 import type { ZodType } from "zod";
+import type { ScorecardDefinition } from "../../src/scorecards.js";
 
 export type PluginSurface = "service" | "overview" | "scorecards" | "health";
 export type PluginConfig = {
@@ -23,6 +24,7 @@ export type PortalPlugin = {
   surfaces: PluginSurface[];
   configSchema: ZodType;
   defaults: Record<string, unknown>;
+  defaultScorecards?: ScorecardDefinition[];
   requiredEnvironment: string[];
   collectService?: (
     service: ServiceRecord,

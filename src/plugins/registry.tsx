@@ -19,6 +19,7 @@ export type PublicPlugin = {
   description: string;
   version: string;
   surfaces: string[];
+  defaultScorecards?: Array<{ id: string; title: string }>;
   enabled: boolean;
   config: Record<string, unknown>;
   health: {

@@ -4,7 +4,7 @@ Scorecards turn metadata and plugin signals into visible, weighted checks. Admin
 
 ## Read coverage
 
-Open **Scorecards** and select a card to compare current service scores. A service dossier shows every enabled card's score and expands the primary card's checks.
+Open **Scorecards** and select a card to compare current service scores. A service dossier shows every enabled card's score; select a score in its **Health** section to inspect that card's checks without leaving the service.
 
 The score is calculated as:
 
@@ -21,6 +21,8 @@ Rules may target configured service tiers, service types, or both. They may read
 Severity communicates organizational intent. Both `required` and `recommended` rules contribute according to their weight; severity does not change the calculation by itself.
 
 Administrators can create cards, choose the primary card, add, edit, disable, preview, source, and scope rules in **Settings → Scorecards**. Plugin providers are managed under **Settings → Integrations**. Changes apply immediately after saving and are recorded in the audit ledger.
+
+Enabling GitHub repository standards writes a default **Repository standards** card to `scorecards.yaml`. Administrators can customize it like any other card; an existing card with the same ID is preserved when the plugin is enabled.
 
 ## Improve a service score
 

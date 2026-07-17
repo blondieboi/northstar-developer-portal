@@ -5820,7 +5820,7 @@ header {
   overflow: auto;
   margin: 12px 0 16px;
 }
-.service-scorecard-strip span {
+.service-scorecard-strip button {
   min-width: 110px;
   border: 1px solid var(--line);
   border-radius: 7px;
@@ -5828,9 +5828,21 @@ header {
   display: flex;
   align-items: baseline;
   gap: 6px;
+  background: transparent;
+  color: var(--ink);
+  text-align: left;
 }
-.service-scorecard-strip span.primary {
+.service-scorecard-strip button.primary {
   border-color: color-mix(in srgb, var(--blue) 30%, var(--line));
+}
+.service-scorecard-strip button.active {
+  border-color: var(--blue);
+  background: color-mix(in srgb, var(--blue) 9%, var(--paper));
+  box-shadow: inset 0 -2px var(--blue);
+}
+.service-scorecard-strip button:focus-visible {
+  outline: 2px solid var(--blue);
+  outline-offset: 2px;
 }
 .service-scorecard-strip strong {
   font: 600 14px "DM Mono";
@@ -6883,6 +6895,25 @@ body {
 .plugin-admin-intro p,
 .signal-rail {
   font-size: 11px;
+}
+.plugin-admin-copy .plugin-contribution {
+  width: fit-content;
+  display: flex;
+  align-items: center;
+  gap: 7px;
+  margin-top: 10px;
+  padding: 7px 9px;
+  border-left: 2px solid var(--blue);
+  background: color-mix(in srgb, var(--blue) 7%, transparent);
+  color: var(--ink);
+  font-size: 10px;
+}
+.plugin-contribution span {
+  flex: 1;
+}
+.plugin-contribution .text-button {
+  flex: none;
+  font-size: 10px;
 }
 .profile strong {
   font-size: 12px;

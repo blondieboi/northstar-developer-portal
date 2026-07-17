@@ -42,6 +42,8 @@ scorecards:
 
 Legacy documents containing `scorecards.rules` are read as one primary `metadata-quality` card. The next scorecard save writes the new `cards` shape.
 
+Enabled plugins may contribute non-primary defaults to the Git-backed configuration. Enabling the GitHub repository standards plugin writes `repository-standards` to `scorecards.yaml` unless the document already contains that ID. After creation it is an ordinary configurable scorecard. Explicit configuration always wins and is never merged with or overwritten by a plugin default.
+
 ## Rule fields
 
 | Field         | Required | Validation                                                                                             |

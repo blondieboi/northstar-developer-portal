@@ -34,7 +34,7 @@ Catalog search matches service name, owner, and system. Filter by tier, service 
 
 The dossier header provides the service identity, classification, freshness, and standards coverage at a glance. The sticky section register below it keeps the page focused on one kind of work at a time:
 
-- **Health** is the default section. It shows scorecard checks, remediation choices, waivers, and score history.
+- **Health** is the default section. It shows every scorecard score; selecting one reveals its checks, remediation choices, waivers, and score history.
 - **Operations** shows deployment state, incidents, security findings, on-call context, and the recent change timeline.
 - **Documentation** lists and renders Markdown synchronized from the service repository.
 - **Integrations** contains normalized Actions, pull request, repository, deployment, security, and maintenance signals from enabled providers.

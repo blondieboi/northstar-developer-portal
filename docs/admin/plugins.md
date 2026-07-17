@@ -6,20 +6,24 @@ Plugins bring operational data into contained portal surfaces without allowing a
 
 Open **Settings → Integrations**, enable the provider, adjust its options, and commit the change. The same page shows deployment readiness, latest provider health, contributed surfaces, manual refresh, and webhook deliveries.
 
-Plugin settings are non-secret and live in `integrations.yaml`. Provider credentials remain deployment-only. Disabling a plugin stops collection and removes its service and scorecard facts; cached snapshots remain available for recovery but are not evaluated.
+Plugin settings are non-secret and live in `integrations.yaml`. Provider credentials remain deployment-only. Disabling a plugin stops collection and removes its generated service and scorecard surfaces; cached snapshots remain available for recovery but are not evaluated.
+
+Some plugins contribute a default scorecard. When **GitHub repository standards** is enabled, Perongen first commits the non-primary **Repository standards** card to `scorecards.yaml`, then commits the enabled provider to `integrations.yaml`. Its eight checks cover CODEOWNERS, README, branch protection, security policy, contribution guidance, issue tracking, repository description, and topics. If `scorecards.yaml` already contains `repository-standards`, Perongen leaves it unchanged, so administrator policy always takes precedence.
+
+Deployments upgraded from an earlier release may already have the provider enabled without its scorecard. In that case, **Settings → Integrations** shows the missing configuration; choose **Add on commit**, then commit the prepared change.
 
 ## Built-in GitHub suite
 
 All six built-in plugins use each service's synchronized repository and installation ID.
 
-| Plugin | Signals |
-| --- | --- |
-| GitHub Actions | Workflow runs, success rate, and latest successful run |
-| GitHub pull requests | Open, draft, review-requested, stale, and oldest pull requests |
-| GitHub repository standards | CODEOWNERS, documentation, policy, topics, and branch safeguards |
-| GitHub deployments and releases | Environment deployments, delivery status, and latest release |
-| GitHub security | Dependabot, code-scanning, and secret-scanning alerts |
-| GitHub maintenance | Issue backlog, stale issues, contributors, and commit freshness |
+| Plugin                          | Signals                                                                                                          |
+| ------------------------------- | ---------------------------------------------------------------------------------------------------------------- |
+| GitHub Actions                  | Workflow runs, success rate, and latest successful run                                                           |
+| GitHub pull requests            | Open, draft, review-requested, stale, and oldest pull requests                                                   |
+| GitHub repository standards     | Default Repository standards scorecard covering CODEOWNERS, documentation, policy, topics, and branch safeguards |
+| GitHub deployments and releases | Environment deployments, delivery status, and latest release                                                     |
+| GitHub security                 | Dependabot, code-scanning, and secret-scanning alerts                                                            |
+| GitHub maintenance              | Issue backlog, stale issues, contributors, and commit freshness                                                  |
 
 Configurable thresholds include:
 

@@ -17,12 +17,7 @@ import {
 import { evaluateRule, ruleApplies } from "./scorecards";
 
 type Section =
-  | "general"
-  | "catalog"
-  | "scorecards"
-  | "actions"
-  | "tools"
-  | "integrations";
+  "general" | "catalog" | "scorecards" | "actions" | "tools" | "integrations";
 const sectionNames: Section[] = [
   "general",
   "catalog",
@@ -80,7 +75,7 @@ export function VisualSettings({ onRefresh }: { onRefresh: () => void }) {
     ]);
     const changed = Boolean(
       config?.source?.appliedSha &&
-        config.source.appliedSha !== c.source?.appliedSha,
+      config.source.appliedSha !== c.source?.appliedSha,
     );
     setConfig(c);
     setUsers(u.users || []);
@@ -124,6 +119,21 @@ export function VisualSettings({ onRefresh }: { onRefresh: () => void }) {
   async function save() {
     setSaving(true);
     try {
+      const addsPluginScorecard =
+        tab === "integrations" &&
+        pluginCatalog.some(
+          (manifest) =>
+            manifest.defaultScorecards?.some(
+              (card: any) =>
+                !config.effective.scorecards.cards.some(
+                  (candidate: any) => candidate.id === card.id,
+                ),
+            ) &&
+            draft.plugins?.some(
+              (plugin: any) =>
+                plugin.id === manifest.id && Boolean(plugin.enabled),
+            ),
+        );
       await jsonFetch(`/api/admin/config/${tab}`, {
         method: "PUT",
         headers: { "content-type": "application/json" },
@@ -132,7 +142,11 @@ export function VisualSettings({ onRefresh }: { onRefresh: () => void }) {
           expectedBlobSha: config.source.files[tab]?.sha,
         }),
       });
-      setMessage("Committed to GitHub and applied.");
+      setMessage(
+        addsPluginScorecard
+          ? "Plugin and default scorecard committed to GitHub and applied."
+          : "Committed to GitHub and applied.",
+      );
       await load(true);
       onRefresh();
     } catch (e) {
@@ -307,6 +321,7 @@ export function VisualSettings({ onRefresh }: { onRefresh: () => void }) {
                     value={draft}
                     change={markDirty}
                     available={pluginCatalog}
+                    scorecards={config.effective.scorecards.cards || []}
                   />
                   <IntegrationPanel status={status} deliveries={webhooks} />
                 </>
@@ -1569,13 +1584,16 @@ function IntegrationBuilder({
   value,
   change,
   available,
+  scorecards,
 }: {
   value: any;
   change: (x: any) => void;
   available: any[];
+  scorecards: any[];
 }) {
   const [refreshing, setRefreshing] = useState(false);
   const [refreshMessage, setRefreshMessage] = useState("");
+  const [preparedScorecards, setPreparedScorecards] = useState<string[]>([]);
   const refresh = async () => {
     setRefreshing(true);
     setRefreshMessage("");
@@ -1713,6 +1731,40 @@ function IntegrationBuilder({
                 <span>{manifest.version}</span>
                 <h4>{manifest.title}</h4>
                 <p>{manifest.description}</p>
+                {manifest.defaultScorecards?.map((card: any) => {
+                  const configured = scorecards.some(
+                    (candidate: any) => candidate.id === card.id,
+                  );
+                  return (
+                    <div className="plugin-contribution" key={card.id}>
+                      <ShieldCheck size={13} />
+                      <span>
+                        {configured
+                          ? `${card.title} scorecard configured`
+                          : preparedScorecards.includes(card.id)
+                            ? `${card.title} will be added with this commit`
+                            : current.enabled
+                              ? `${card.title} is not in scorecards.yaml`
+                              : `Adds the ${card.title} scorecard when enabled`}
+                      </span>
+                      {current.enabled &&
+                        !configured &&
+                        !preparedScorecards.includes(card.id) && (
+                          <button
+                            className="text-button"
+                            onClick={() => {
+                              setPreparedScorecards((items) => [
+                                ...new Set([...items, card.id]),
+                              ]);
+                              change({ ...value });
+                            }}
+                          >
+                            Add on commit
+                          </button>
+                        )}
+                    </div>
+                  );
+                })}
               </div>
               <div className="plugin-surfaces">
                 {manifest.surfaces.map((surface: string) => (
