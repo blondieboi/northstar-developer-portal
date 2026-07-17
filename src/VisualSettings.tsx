@@ -157,6 +157,29 @@ export function VisualSettings({ onRefresh }: { onRefresh: () => void }) {
       setSaving(false);
     }
   }
+  async function addPluginScorecards() {
+    setSaving(true);
+    try {
+      await jsonFetch("/api/admin/config/integrations", {
+        method: "PUT",
+        headers: { "content-type": "application/json" },
+        body: JSON.stringify({
+          value: config.effective.integrations,
+          expectedBlobSha: config.source.files.integrations?.sha,
+        }),
+      });
+      setMessage("Default scorecard committed to scorecards.yaml and applied.");
+      await load(true);
+      onRefresh();
+    } catch (e) {
+      const error = (e as Error).message;
+      setMessage(error);
+      if (error.includes("changed in GitHub")) setRemoteConflict(true);
+      throw e;
+    } finally {
+      setSaving(false);
+    }
+  }
   async function reset() {
     setSaving(true);
     try {
@@ -322,6 +345,10 @@ export function VisualSettings({ onRefresh }: { onRefresh: () => void }) {
                     change={markDirty}
                     available={pluginCatalog}
                     scorecards={config.effective.scorecards.cards || []}
+                    persistedPlugins={
+                      config.effective.integrations.plugins || []
+                    }
+                    addDefaultScorecards={addPluginScorecards}
                   />
                   <IntegrationPanel status={status} deliveries={webhooks} />
                 </>
@@ -1585,15 +1612,19 @@ function IntegrationBuilder({
   change,
   available,
   scorecards,
+  persistedPlugins,
+  addDefaultScorecards,
 }: {
   value: any;
   change: (x: any) => void;
   available: any[];
   scorecards: any[];
+  persistedPlugins: any[];
+  addDefaultScorecards: () => Promise<void>;
 }) {
   const [refreshing, setRefreshing] = useState(false);
   const [refreshMessage, setRefreshMessage] = useState("");
-  const [preparedScorecards, setPreparedScorecards] = useState<string[]>([]);
+  const [addingScorecard, setAddingScorecard] = useState(false);
   const refresh = async () => {
     setRefreshing(true);
     setRefreshMessage("");
@@ -1718,6 +1749,9 @@ function IntegrationBuilder({
             ...current,
             config: { ...current.config, [key]: next },
           });
+        const persistedEnabled = persistedPlugins.some(
+          (plugin: any) => plugin.id === manifest.id && plugin.enabled,
+        );
         return (
           <article
             className={`plugin-admin-card ${current.enabled ? "enabled" : ""}`}
@@ -1741,27 +1775,30 @@ function IntegrationBuilder({
                       <span>
                         {configured
                           ? `${card.title} scorecard configured`
-                          : preparedScorecards.includes(card.id)
-                            ? `${card.title} will be added with this commit`
+                          : persistedEnabled
+                            ? `${card.title} is not in scorecards.yaml`
                             : current.enabled
-                              ? `${card.title} is not in scorecards.yaml`
+                              ? `${card.title} will be added when you commit this plugin`
                               : `Adds the ${card.title} scorecard when enabled`}
                       </span>
-                      {current.enabled &&
-                        !configured &&
-                        !preparedScorecards.includes(card.id) && (
-                          <button
-                            className="text-button"
-                            onClick={() => {
-                              setPreparedScorecards((items) => [
-                                ...new Set([...items, card.id]),
-                              ]);
-                              change({ ...value });
-                            }}
-                          >
-                            Add on commit
-                          </button>
-                        )}
+                      {persistedEnabled && !configured && (
+                        <button
+                          className="text-button"
+                          disabled={addingScorecard}
+                          onClick={async () => {
+                            setAddingScorecard(true);
+                            try {
+                              await addDefaultScorecards();
+                            } catch {
+                              // The parent renders the actionable error.
+                            } finally {
+                              setAddingScorecard(false);
+                            }
+                          }}
+                        >
+                          {addingScorecard ? "Adding…" : "Add scorecard"}
+                        </button>
+                      )}
                     </div>
                   );
                 })}

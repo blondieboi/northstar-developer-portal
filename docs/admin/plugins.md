@@ -10,7 +10,7 @@ Plugin settings are non-secret and live in `integrations.yaml`. Provider credent
 
 Some plugins contribute a default scorecard. When **GitHub repository standards** is enabled, Perongen first commits the non-primary **Repository standards** card to `scorecards.yaml`, then commits the enabled provider to `integrations.yaml`. Its eight checks cover CODEOWNERS, README, branch protection, security policy, contribution guidance, issue tracking, repository description, and topics. If `scorecards.yaml` already contains `repository-standards`, Perongen leaves it unchanged, so administrator policy always takes precedence.
 
-Deployments upgraded from an earlier release may already have the provider enabled without its scorecard. In that case, **Settings → Integrations** shows the missing configuration; choose **Add on commit**, then commit the prepared change.
+Deployments upgraded from an earlier release may already have the provider enabled without its scorecard. In that case, **Settings → Integrations** shows the missing configuration; choose **Add scorecard** to commit and apply `scorecards.yaml` immediately.
 
 ## Built-in GitHub suite
 
