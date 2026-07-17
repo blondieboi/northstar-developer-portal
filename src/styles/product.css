@@ -1357,7 +1357,8 @@ header {
 .intake-thesis-status span {
   margin-top: 8px;
   color: var(--muted);
-  font-size: 9px;
+  font-size: 10px;
+  line-height: 1.45;
   text-transform: uppercase;
   letter-spacing: 0.09em;
 }
@@ -1408,7 +1409,7 @@ header {
 .intake-queue-head > div span,
 .intake-queue-head > div strong {
   font-family: var(--font-mono);
-  font-size: 8px;
+  font-size: 9px;
   letter-spacing: 0.08em;
   text-transform: uppercase;
 }
@@ -1429,7 +1430,7 @@ header {
   border: 0;
   outline: 0;
   background: transparent;
-  font-size: 11px;
+  font-size: 12px;
 }
 .intake-queue-list {
   min-height: 0;
@@ -1474,7 +1475,14 @@ header {
   white-space: nowrap;
 }
 .intake-queue-list button strong { font-size: 11px; }
-.intake-queue-list button small { color: var(--muted); font-size: 8px; }
+.intake-queue-list button small { color: var(--muted); font-size: 9px; }
+.intake-queue-empty {
+  margin: 0;
+  padding: 22px 18px;
+  color: var(--muted);
+  font-size: 10px;
+  line-height: 1.5;
+}
 .intake-queue-list .readiness {
   width: 6px;
   height: 6px;
@@ -1526,7 +1534,7 @@ header {
   background: color-mix(in srgb, var(--warning) 6%, var(--paper));
   color: var(--warning);
 }
-.intake-scan-warning span { display: grid; gap: 2px; font-size: 8px; }
+.intake-scan-warning span { display: grid; gap: 3px; font-size: 10px; line-height: 1.4; }
 .intake-section {
   padding: 26px 28px 28px;
   border-bottom: 1px solid var(--line);
@@ -1567,7 +1575,7 @@ header {
 .intake-yaml > header strong { font-size: 11px; }
 .intake-section-title small,
 .intake-plugin-plan > header small,
-.intake-yaml > header small { color: var(--muted); font-size: 8px; }
+.intake-yaml > header small { color: var(--muted); font-size: 10px; line-height: 1.4; }
 .intake-form-grid {
   margin: 22px 0 0 25px;
   display: grid;
@@ -1581,7 +1589,7 @@ header {
   align-content: start;
   gap: 7px;
   color: var(--ink);
-  font-size: 9px;
+  font-size: 10px;
   font-weight: 700;
 }
 .intake-field input,
@@ -1594,7 +1602,7 @@ header {
   border: 1px solid var(--line);
   border-radius: 5px;
   background: var(--paper);
-  font: 500 11px var(--font-sans);
+  font: 500 12px var(--font-sans);
 }
 .intake-field textarea {
   height: 76px;
@@ -1606,7 +1614,7 @@ header {
   min-width: 0;
   display: block;
   color: var(--muted);
-  font-size: 8px;
+  font-size: 9px;
   font-weight: 450;
   line-height: 1.45;
 }
@@ -1621,7 +1629,7 @@ header {
 .intake-evidence b {
   margin-right: 5px;
   font-family: var(--font-mono);
-  font-size: 7px;
+  font-size: 8px;
   font-weight: 600;
   letter-spacing: 0.06em;
   text-transform: uppercase;
@@ -1665,12 +1673,12 @@ header {
   color: var(--green);
 }
 .intake-plugin-plan > div span { min-width: 0; display: grid; gap: 3px; }
-.intake-plugin-plan > div strong { font-size: 9px; }
-.intake-plugin-plan > div small { color: var(--muted); font-size: 7px; }
+.intake-plugin-plan > div strong { font-size: 10px; }
+.intake-plugin-plan > div small { color: var(--muted); font-size: 9px; line-height: 1.35; }
 .intake-plugin-plan > div em {
   color: var(--muted);
   font-family: var(--font-mono);
-  font-size: 7px;
+  font-size: 8px;
   font-style: normal;
   text-transform: uppercase;
 }
@@ -1683,7 +1691,7 @@ header {
   border-radius: 5px;
   background: color-mix(in srgb, var(--navy) 96%, black);
   color: #e5eee8;
-  font: 9px/1.65 var(--font-mono);
+  font: 10px/1.65 var(--font-mono);
   white-space: pre;
 }
 .intake-commit-bar {
@@ -1706,7 +1714,8 @@ header {
   align-items: center;
   gap: 6px;
   color: var(--muted);
-  font-size: 8px;
+  font-size: 10px;
+  line-height: 1.4;
   text-decoration: none;
 }
 .intake-commit-bar a { color: var(--green); font-weight: 700; }

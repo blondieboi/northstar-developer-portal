@@ -4,6 +4,10 @@ import { installationOctokit } from "./github-app.js";
 import { validateServiceMetadata } from "./github.js";
 import { mapWithConcurrency } from "./platform.js";
 import { pluginManifests } from "./plugins/registry.js";
+import {
+  intakeDraftSchema,
+  type IntakeDraft,
+} from "../src/intake-contract.js";
 
 type Repository = {
   name: string;
@@ -20,24 +24,6 @@ type Repository = {
   pushed_at?: string | null;
 };
 
-export type IntakeDraft = {
-  name: string;
-  title: string;
-  description: string;
-  owner: string;
-  lifecycle: string;
-  tier: string;
-  type: string;
-  system: string;
-  language: string;
-  docsPath: string;
-  dependsOn: string;
-  exposure: string;
-  dataSensitivity: string;
-  authentication: string;
-  expiresAt: string;
-};
-
 export type IntakeEvidence = {
   field: keyof IntakeDraft;
   value: string;
@@ -45,6 +31,22 @@ export type IntakeEvidence = {
   source: string;
   detail: string;
 };
+
+type IntakeDiscovery = {
+  candidates: ReturnType<typeof analyzeRepository>[];
+  scannedAt: string;
+  cached: boolean;
+};
+
+const discoveryCache = new Map<
+  string,
+  Omit<IntakeDiscovery, "cached"> & { expiresAt: number }
+>();
+const discoveryCacheMs = 60_000;
+
+export function clearIntakeDiscoveryCache() {
+  discoveryCache.clear();
+}
 
 const titleize = (value: string) =>
   value
@@ -90,13 +92,14 @@ export function analyzeRepository(
     config.catalog.types.some((item) => item.id === id),
   ) || "";
   const experimental = topics.some((topic) => /^(prototype|experiment|experimental|poc)$/.test(topic));
-  const lifecycle = repository.archived
+  const lifecycle = repository.archived && config.catalog.lifecycles.includes("deprecated")
     ? "deprecated"
-    : experimental
+    : experimental && config.catalog.lifecycles.includes("experimental")
       ? "experimental"
-      : config.catalog.lifecycles.includes("production")
+      : deployment && config.catalog.lifecycles.includes("production")
         ? "production"
-        : config.catalog.lifecycles[0];
+        : "";
+  const suggestedLifecycle = lifecycle || (config.catalog.lifecycles.includes("production") ? "production" : config.catalog.lifecycles[0]);
   const tierMatch = config.catalog.tiers.find((tier) =>
     topics.includes(tier.id) || topics.includes(`tier-${tier.id}`),
   );
@@ -113,9 +116,7 @@ export function analyzeRepository(
   const publicExposure = Boolean(repository.homepage) || deployment || topics.includes("public");
   const auth = /auth0|clerk|next-auth|passport|oauth|openid|firebase-auth|supabase\/auth/.test(joined);
   const database = /prisma|sequelize|typeorm|mongoose|postgres|mysql|database|supabase/.test(joined);
-  const expiresAt = experimental
-    ? new Date(now.getTime() + 30 * 86_400_000).toISOString().slice(0, 10)
-    : "";
+  const expiresAt = new Date(now.getTime() + 30 * 86_400_000).toISOString().slice(0, 10);
   const draft: IntakeDraft = {
     name: slug(repository.name),
     title: titleize(repository.name),
@@ -137,7 +138,7 @@ export function analyzeRepository(
     { field: "name", value: draft.name, confidence: "explicit", source: "Repository name", detail: repository.full_name },
     { field: "description", value: draft.description, confidence: draft.description ? "explicit" : "unavailable", source: "GitHub description", detail: draft.description || "No repository description" },
     { field: "owner", value: owner, confidence: owner ? "strong" : "unavailable", source: "CODEOWNERS", detail: owner ? `Matched ${owner}` : "No team or user owner found" },
-    { field: "lifecycle", value: lifecycle, confidence: repository.archived || experimental || deployment ? "strong" : "inferred", source: repository.archived ? "Archived state" : experimental ? "Repository topic" : deployment ? "Deployment workflow" : "Active repository", detail: repository.archived ? "Repository is archived" : experimental ? "Prototype or experiment topic found" : deployment ? "Deployment automation found" : "No lifecycle marker found" },
+    { field: "lifecycle", value: suggestedLifecycle, confidence: lifecycle ? "strong" : "inferred", source: repository.archived ? "Archived state" : experimental ? "Repository topic" : deployment ? "Deployment workflow" : "Active repository", detail: repository.archived ? "Repository is archived" : experimental ? "Prototype or experiment topic found" : deployment ? "Deployment automation found" : `Suggested ${suggestedLifecycle}; confirm before onboarding` },
     { field: "type", value: type, confidence: type ? "strong" : "unavailable", source: "Repository structure", detail: type ? `Matched ${type} files or dependencies` : "No configured service type matched" },
     { field: "tier", value: tier, confidence: tier ? "explicit" : "unavailable", source: "Repository topics", detail: tierTopic || "No configured tier topic" },
     { field: "system", value: draft.system, confidence: draft.system ? "explicit" : "unavailable", source: "Repository topics", detail: systemTopic || "No system-* topic" },
@@ -219,7 +220,32 @@ async function repositoryEvidence(octokit: any, repository: Repository) {
   return { paths, contents };
 }
 
-export async function discoverIntakeCandidates(installationId: number, catalogRepositories: string[]) {
+export async function discoverIntakeCandidates(
+  installationId: number,
+  catalogRepositories: string[],
+  options: { refresh?: boolean } = {},
+): Promise<IntakeDiscovery> {
+  const config = getConfig();
+  const cacheKey = JSON.stringify({
+    installationId,
+    repositories: [...catalogRepositories]
+      .map((repository) => repository.toLowerCase())
+      .sort(),
+    lifecycles: config.catalog.lifecycles,
+    tiers: config.catalog.tiers.map((tier) => tier.id),
+    types: config.catalog.types.map((type) => type.id),
+    plugins: config.integrations.plugins.map((plugin) => [
+      plugin.id,
+      plugin.enabled,
+    ]),
+  });
+  const cached = discoveryCache.get(cacheKey);
+  if (!options.refresh && cached && cached.expiresAt > Date.now())
+    return {
+      candidates: structuredClone(cached.candidates),
+      scannedAt: cached.scannedAt,
+      cached: true,
+    };
   const octokit = await installationOctokit(installationId);
   const repositories: Repository[] = [];
   for (let page = 1; ; page++) {
@@ -236,7 +262,7 @@ export async function discoverIntakeCandidates(installationId: number, catalogRe
         Number(Boolean(left.fork)) - Number(Boolean(right.fork)) ||
         new Date(right.pushed_at || 0).getTime() - new Date(left.pushed_at || 0).getTime(),
     );
-  return mapWithConcurrency(untracked, 5, async (repository) => {
+  const candidates = await mapWithConcurrency(untracked, 5, async (repository) => {
     try {
       const evidence = await repositoryEvidence(octokit, repository);
       const candidate = analyzeRepository(repository, evidence.paths, evidence.contents);
@@ -250,11 +276,19 @@ export async function discoverIntakeCandidates(installationId: number, catalogRe
       };
     }
   });
+  const scannedAt = new Date().toISOString();
+  discoveryCache.set(cacheKey, {
+    candidates,
+    scannedAt,
+    expiresAt: Date.now() + discoveryCacheMs,
+  });
+  return { candidates, scannedAt, cached: false };
 }
 
-export function intakeMetadata(draft: IntakeDraft) {
-  if (!draft || typeof draft !== "object") throw new Error("Intake draft is required");
+export function intakeMetadata(input: unknown) {
+  const draft = intakeDraftSchema.parse(input);
   if (!draft.owner?.trim()) throw new Error("An accountable owner is required");
+  if (!draft.lifecycle) throw new Error("Confirm the service lifecycle before onboarding");
   if (!draft.exposure || !draft.dataSensitivity || !draft.authentication)
     throw new Error("Confirm exposure, data sensitivity, and authentication before onboarding");
   const metadata: any = {
@@ -289,7 +323,7 @@ export function intakeMetadata(draft: IntakeDraft) {
   return validateServiceMetadata(metadata);
 }
 
-export function intakePreview(draft: IntakeDraft) {
+export function intakePreview(draft: unknown) {
   const metadata = intakeMetadata(draft);
   return { metadata, yaml: YAML.stringify(metadata, { lineWidth: 0 }) };
 }

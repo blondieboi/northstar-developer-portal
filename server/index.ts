@@ -98,8 +98,8 @@ import {
   discoverIntakeCandidates,
   intakePreview,
   openIntakePullRequest,
-  type IntakeDraft,
 } from "./intake.js";
+import type { IntakeDraft } from "../src/intake-contract.js";
 
 const server = Fastify({ logger: true });
 async function reconcileCampaignStatus(id: string | number) {
@@ -585,10 +585,10 @@ server.post<{ Body?: { installationId?: number } }>(
     };
   },
 );
-server.get(
+server.get<{ Querystring: { refresh?: string } }>(
   "/api/admin/intake",
   { preHandler: requireAdmin },
-  async (_request, reply) => {
+  async (request, reply) => {
     const installationId = Number(
       getConfig().catalog.installationId || process.env.GITHUB_INSTALLATION_ID,
     );
@@ -596,12 +596,13 @@ server.get(
       return reply.code(400).send({ error: "GitHub installation ID is not configured" });
     try {
       const [services, teams] = await Promise.all([listServices(), listTeams()]);
-      const candidates = await discoverIntakeCandidates(
+      const discovery = await discoverIntakeCandidates(
         installationId,
         (services || []).map((service: any) => service.repository),
+        { refresh: request.query.refresh === "1" },
       );
       return {
-        candidates,
+        ...discovery,
         installationId,
         metadataPath: getConfig().catalog.serviceMetadataPath,
         teams: (teams || []).map((team: any) => ({ name: team.name, title: team.title })),

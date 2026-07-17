@@ -7,11 +7,12 @@ vi.mock("./github-app.js", () => ({
 
 import {
   analyzeRepository,
+  clearIntakeDiscoveryCache,
   discoverIntakeCandidates,
   intakePreview,
   openIntakePullRequest,
-  type IntakeDraft,
 } from "./intake.js";
+import type { IntakeDraft } from "../src/intake-contract.js";
 
 const draft: IntakeDraft = {
   name: "checkout-app",
@@ -32,7 +33,10 @@ const draft: IntakeDraft = {
 };
 
 describe("application intake", () => {
-  beforeEach(() => request.mockReset());
+  beforeEach(() => {
+    request.mockReset();
+    clearIntakeDiscoveryCache();
+  });
 
   it("derives recommendations with field-level repository evidence", () => {
     const candidate = analyzeRepository(
@@ -78,6 +82,31 @@ describe("application intake", () => {
     );
     expect(intakePreview(draft).yaml).toContain("dataSensitivity: confidential");
     expect(intakePreview(draft).metadata.spec.dependsOn).toEqual(["service:inventory"]);
+  });
+
+  it("requires lifecycle confirmation when the repository has no strong signal", () => {
+    const candidate = analyzeRepository(
+      {
+        name: "utility",
+        full_name: "acme/utility",
+        owner: { login: "acme" },
+      },
+      [],
+    );
+    expect(candidate.draft.lifecycle).toBe("");
+    expect(candidate.evidence.find((item) => item.field === "lifecycle")).toMatchObject({
+      confidence: "inferred",
+      value: "production",
+    });
+    expect(() => intakePreview({ ...draft, lifecycle: "" })).toThrow(
+      "Confirm the service lifecycle",
+    );
+  });
+
+  it("rejects repository paths that could escape the documentation root", () => {
+    expect(() => intakePreview({ ...draft, docsPath: "../private" })).toThrow(
+      "safe repository-relative path",
+    );
   });
 
   it("creates a new metadata file and reviewable pull request", async () => {
@@ -139,10 +168,29 @@ describe("application intake", () => {
         throw new Error("Contents unavailable");
       return { data: {} };
     });
-    const [candidate] = await discoverIntakeCandidates(123, []);
+    const { candidates: [candidate] } = await discoverIntakeCandidates(123, []);
     expect(candidate).toMatchObject({
       repository: "acme/private-app",
       scanError: "Repository evidence is unavailable: Contents unavailable",
     });
+  });
+
+  it("reuses a recent discovery unless an administrator explicitly refreshes", async () => {
+    request.mockImplementation(async (route?: string) => {
+      if (!route || route.includes("/installation/repositories"))
+        return { data: { repositories: [] } };
+      return { data: {} };
+    });
+    const first = await discoverIntakeCandidates(456, []);
+    const second = await discoverIntakeCandidates(456, []);
+    const refreshed = await discoverIntakeCandidates(456, [], { refresh: true });
+    expect(first.cached).toBe(false);
+    expect(second.cached).toBe(true);
+    expect(refreshed.cached).toBe(false);
+    expect(
+      request.mock.calls.filter(([route]) =>
+        String(route).includes("/installation/repositories"),
+      ),
+    ).toHaveLength(2);
   });
 });

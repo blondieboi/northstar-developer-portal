@@ -13,64 +13,11 @@ import {
   ShieldCheck,
   Sparkles,
 } from "lucide-react";
-import { useEffect, useMemo, useState } from "react";
-
-type Draft = {
-  name: string;
-  title: string;
-  description: string;
-  owner: string;
-  lifecycle: string;
-  tier: string;
-  type: string;
-  system: string;
-  language: string;
-  docsPath: string;
-  dependsOn: string;
-  exposure: string;
-  dataSensitivity: string;
-  authentication: string;
-  expiresAt: string;
-};
-
-type Evidence = {
-  field: keyof Draft;
-  value: string;
-  confidence: "explicit" | "strong" | "inferred" | "unavailable";
-  source: string;
-  detail: string;
-};
-
-type Candidate = {
-  repository: string;
-  url: string;
-  archived: boolean;
-  fork: boolean;
-  pushedAt: string | null;
-  scanError?: string;
-  readiness: number;
-  draft: Draft;
-  evidence: Evidence[];
-  plugins: Array<{ id: string; title: string; enabled: boolean; recommended: boolean; reason: string }>;
-};
-
-type IntakeData = {
-  candidates: Candidate[];
-  metadataPath: string;
-  teams: Array<{ name: string; title: string }>;
-  catalog: {
-    lifecycles: string[];
-    tiers: Array<{ id: string; title: string }>;
-    types: Array<{ id: string; title: string }>;
-  };
-};
-
-const empty: IntakeData = {
-  candidates: [],
-  metadataPath: ".portal/service.yaml",
-  teams: [],
-  catalog: { lifecycles: [], tiers: [], types: [] },
-};
+import type { IntakeDraft as Draft } from "./intake-contract";
+import {
+  useApplicationIntake,
+  type IntakeEvidence as Evidence,
+} from "./useApplicationIntake";
 
 function EvidenceNote({ item }: { item?: Evidence }) {
   if (!item) return null;
@@ -94,100 +41,11 @@ function Field({ label, evidence, children }: { label: string; evidence?: Eviden
 }
 
 export function ApplicationIntake() {
-  const [data, setData] = useState<IntakeData>(empty);
-  const [selected, setSelected] = useState("");
-  const [draft, setDraft] = useState<Draft | null>(null);
-  const [query, setQuery] = useState("");
-  const [yaml, setYaml] = useState("");
-  const [loading, setLoading] = useState(true);
-  const [previewing, setPreviewing] = useState(false);
-  const [working, setWorking] = useState(false);
-  const [error, setError] = useState("");
-  const [result, setResult] = useState<any>(null);
-
-  async function scan() {
-    setLoading(true);
-    setError("");
-    setResult(null);
-    try {
-      const response = await fetch("/api/admin/intake");
-      const body = await response.json();
-      if (!response.ok) throw new Error(body.error || "Repository discovery failed");
-      setData(body);
-      const next = body.candidates.find((candidate: Candidate) => candidate.repository === selected) || body.candidates[0];
-      setSelected(next?.repository || "");
-      setDraft(next ? structuredClone(next.draft) : null);
-    } catch (nextError) {
-      setError((nextError as Error).message);
-    } finally {
-      setLoading(false);
-    }
-  }
-
-  useEffect(() => { void scan(); }, []);
-  const candidate = data.candidates.find((item) => item.repository === selected) || null;
-  const evidence = useMemo(
-    () => Object.fromEntries((candidate?.evidence || []).map((item) => [item.field, item])) as Partial<Record<keyof Draft, Evidence>>,
-    [candidate],
-  );
-  const filtered = data.candidates.filter((item) => item.repository.toLowerCase().includes(query.toLowerCase()));
-
-  useEffect(() => {
-    if (!draft) return;
-    const controller = new AbortController();
-    const timer = setTimeout(async () => {
-      setPreviewing(true);
-      try {
-        const response = await fetch("/api/admin/intake/preview", {
-          method: "POST",
-          headers: { "content-type": "application/json" },
-          body: JSON.stringify({ draft }),
-          signal: controller.signal,
-        });
-        const body = await response.json();
-        if (!response.ok) throw new Error(body.error || "Metadata proposal is invalid");
-        setYaml(body.yaml);
-        setError("");
-      } catch (nextError) {
-        if ((nextError as Error).name !== "AbortError") {
-          setYaml("");
-          setError((nextError as Error).message);
-        }
-      } finally {
-        if (!controller.signal.aborted) setPreviewing(false);
-      }
-    }, 240);
-    return () => { clearTimeout(timer); controller.abort(); };
-  }, [draft]);
-
-  const update = <K extends keyof Draft>(key: K, value: Draft[K]) =>
-    setDraft((current) => current ? { ...current, [key]: value } : current);
-  const choose = (item: Candidate) => {
-    setSelected(item.repository);
-    setDraft(structuredClone(item.draft));
-    setYaml("");
-    setError("");
-    setResult(null);
-  };
-  async function onboard() {
-    if (!draft || !candidate || !yaml) return;
-    setWorking(true);
-    setError("");
-    try {
-      const response = await fetch("/api/admin/intake/onboard", {
-        method: "POST",
-        headers: { "content-type": "application/json" },
-        body: JSON.stringify({ repository: candidate.repository, draft }),
-      });
-      const body = await response.json();
-      if (!response.ok) throw new Error(body.error || "Onboarding pull request could not be opened");
-      setResult(body.pullRequest);
-    } catch (nextError) {
-      setError((nextError as Error).message);
-    } finally {
-      setWorking(false);
-    }
-  }
+  const {
+    data, selected, draft, query, yaml, loading, previewing, working,
+    scanError, proposalError, result, candidate, evidence, filtered, missing, setQuery, scan, update,
+    choose, onboard,
+  } = useApplicationIntake();
 
   return (
     <div className="page intake-page">
@@ -200,12 +58,12 @@ export function ApplicationIntake() {
         <div className="intake-thesis-status">
           <Radar size={25} />
           <strong>{loading ? "Scanning" : data.candidates.length}</strong>
-          <span>{loading ? "Reading installed repositories" : "uncatalogued repositories"}</span>
-          <button onClick={scan} disabled={loading}><RefreshCw size={13} className={loading ? "spin" : ""} /> Scan again</button>
+          <span>{loading ? "Reading installed repositories" : `uncatalogued repositories · ${data.cached ? "cached" : "just scanned"}`}</span>
+          <button onClick={() => scan(true)} disabled={loading}><RefreshCw size={13} className={loading ? "spin" : ""} /> Scan again</button>
         </div>
       </header>
 
-      {error && !candidate && <div className="intake-global-error" role="alert"><AlertTriangle size={16} /> <span><strong>Application Intake is unavailable</strong>{error}</span></div>}
+      {scanError && <div className="intake-global-error" role="alert"><AlertTriangle size={16} /> <span><strong>{candidate ? "Repository scan could not be refreshed" : "Application Intake is unavailable"}</strong>{scanError}</span></div>}
       {loading ? (
         <div className="intake-loading" role="status"><LoaderCircle className="spin" size={22} /><strong>Reading repository evidence</strong><span>File names, manifests, topics, and ownership signals are being inspected.</span></div>
       ) : !data.candidates.length ? (
@@ -219,13 +77,14 @@ export function ApplicationIntake() {
             </div>
             <div className="intake-queue-list">
               {filtered.map((item) => (
-                <button key={item.repository} className={item.repository === selected ? "active" : ""} onClick={() => choose(item)}>
+                <button key={item.repository} aria-pressed={item.repository === selected} className={item.repository === selected ? "active" : ""} onClick={() => choose(item)}>
                   <GitBranch size={14} />
-                  <span><strong>{item.repository.split("/")[1]}</strong><small>{item.repository.split("/")[0]} · {item.readiness}% evidenced</small></span>
+                  <span><strong>{item.repository.split("/")[1]}</strong><small>{item.repository.split("/")[0]} · {item.archived ? "archived · " : item.fork ? "fork · " : ""}{item.readiness}% evidenced</small></span>
                   <i className={`readiness ${item.readiness >= 70 ? "high" : item.readiness >= 45 ? "medium" : "low"}`} />
                   <ChevronRight size={14} />
                 </button>
               ))}
+              {!filtered.length && <p className="intake-queue-empty">No repositories match “{query}”.</p>}
             </div>
           </aside>
 
@@ -240,11 +99,11 @@ export function ApplicationIntake() {
               <div className="intake-section">
                 <div className="intake-section-title"><FileCode2 size={15} /><span><strong>Identity</strong><small>Repository-owned catalog identity</small></span></div>
                 <div className="intake-form-grid">
-                  <Field label="Service name" evidence={evidence.name}><input value={draft.name} onChange={(event) => update("name", event.target.value)} /></Field>
-                  <Field label="Display title"><input value={draft.title} onChange={(event) => update("title", event.target.value)} /></Field>
-                  <Field label="Description" evidence={evidence.description}><textarea value={draft.description} onChange={(event) => update("description", event.target.value)} /></Field>
+                  <Field label="Service name" evidence={evidence.name}><input aria-label="Service name" value={draft.name} onChange={(event) => update("name", event.target.value)} /></Field>
+                  <Field label="Display title"><input aria-label="Display title" value={draft.title} onChange={(event) => update("title", event.target.value)} /></Field>
+                  <Field label="Description" evidence={evidence.description}><textarea aria-label="Description" value={draft.description} onChange={(event) => update("description", event.target.value)} /></Field>
                   <Field label="Accountable owner" evidence={evidence.owner}>
-                    <input list="intake-teams" value={draft.owner} onChange={(event) => update("owner", event.target.value)} placeholder="team:platform" />
+                    <input aria-label="Accountable owner" list="intake-teams" value={draft.owner} onChange={(event) => update("owner", event.target.value)} placeholder="team:platform" />
                     <datalist id="intake-teams">{data.teams.map((team) => <option key={team.name} value={`team:${team.name}`}>{team.title}</option>)}</datalist>
                   </Field>
                 </div>
@@ -253,29 +112,29 @@ export function ApplicationIntake() {
               <div className="intake-section">
                 <div className="intake-section-title"><Sparkles size={15} /><span><strong>Classification</strong><small>Placement in the software catalog</small></span></div>
                 <div className="intake-form-grid three">
-                  <Field label="Lifecycle" evidence={evidence.lifecycle}><select value={draft.lifecycle} onChange={(event) => update("lifecycle", event.target.value)}>{data.catalog.lifecycles.map((item) => <option key={item}>{item}</option>)}</select></Field>
-                  <Field label="Service type" evidence={evidence.type}><select value={draft.type} onChange={(event) => update("type", event.target.value)}><option value="">Unclassified</option>{data.catalog.types.map((item) => <option key={item.id} value={item.id}>{item.title}</option>)}</select></Field>
-                  <Field label="Tier" evidence={evidence.tier}><select value={draft.tier} onChange={(event) => update("tier", event.target.value)}><option value="">Unclassified</option>{data.catalog.tiers.map((item) => <option key={item.id} value={item.id}>{item.title}</option>)}</select></Field>
-                  <Field label="System" evidence={evidence.system}><input value={draft.system} onChange={(event) => update("system", event.target.value)} placeholder="Optional" /></Field>
-                  <Field label="Language" evidence={evidence.language}><input value={draft.language} onChange={(event) => update("language", event.target.value)} /></Field>
-                  {draft.lifecycle === "experimental" && <Field label="Experiment expires"><input type="date" value={draft.expiresAt} onChange={(event) => update("expiresAt", event.target.value)} /></Field>}
+                  <Field label="Lifecycle" evidence={evidence.lifecycle}><select aria-label="Lifecycle" value={draft.lifecycle} onChange={(event) => update("lifecycle", event.target.value)}><option value="">Confirm lifecycle…</option>{data.catalog.lifecycles.map((item) => <option key={item}>{item}</option>)}</select></Field>
+                  <Field label="Service type" evidence={evidence.type}><select aria-label="Service type" value={draft.type} onChange={(event) => update("type", event.target.value)}><option value="">Unclassified</option>{data.catalog.types.map((item) => <option key={item.id} value={item.id}>{item.title}</option>)}</select></Field>
+                  <Field label="Tier" evidence={evidence.tier}><select aria-label="Tier" value={draft.tier} onChange={(event) => update("tier", event.target.value)}><option value="">Unclassified</option>{data.catalog.tiers.map((item) => <option key={item.id} value={item.id}>{item.title}</option>)}</select></Field>
+                  <Field label="System" evidence={evidence.system}><input aria-label="System" value={draft.system} onChange={(event) => update("system", event.target.value)} placeholder="Optional" /></Field>
+                  <Field label="Language" evidence={evidence.language}><input aria-label="Language" value={draft.language} onChange={(event) => update("language", event.target.value)} /></Field>
+                  {draft.lifecycle === "experimental" && <Field label="Experiment expires"><input aria-label="Experiment expires" type="date" value={draft.expiresAt} onChange={(event) => update("expiresAt", event.target.value)} /></Field>}
                 </div>
               </div>
 
               <div className="intake-section risk-confirmation">
                 <div className="intake-section-title"><ShieldCheck size={15} /><span><strong>Risk facts</strong><small>Required confirmation—Perongen will not guess</small></span></div>
                 <div className="intake-form-grid three">
-                  <Field label="Exposure" evidence={evidence.exposure}><select value={draft.exposure} onChange={(event) => update("exposure", event.target.value)}><option value="">Confirm…</option><option value="internal">Internal</option><option value="public">Public</option></select></Field>
-                  <Field label="Data sensitivity" evidence={evidence.dataSensitivity}><select value={draft.dataSensitivity} onChange={(event) => update("dataSensitivity", event.target.value)}><option value="">Confirm…</option><option value="none">None</option><option value="internal">Internal</option><option value="confidential">Confidential</option><option value="restricted">Restricted</option></select></Field>
-                  <Field label="Authentication" evidence={evidence.authentication}><select value={draft.authentication} onChange={(event) => update("authentication", event.target.value)}><option value="">Confirm…</option><option value="none">None</option><option value="optional">Optional</option><option value="required">Required</option></select></Field>
+                  <Field label="Exposure" evidence={evidence.exposure}><select aria-label="Exposure" value={draft.exposure} onChange={(event) => update("exposure", event.target.value as Draft["exposure"])}><option value="">Confirm…</option><option value="internal">Internal</option><option value="public">Public</option></select></Field>
+                  <Field label="Data sensitivity" evidence={evidence.dataSensitivity}><select aria-label="Data sensitivity" value={draft.dataSensitivity} onChange={(event) => update("dataSensitivity", event.target.value as Draft["dataSensitivity"])}><option value="">Confirm…</option><option value="none">None</option><option value="internal">Internal</option><option value="confidential">Confidential</option><option value="restricted">Restricted</option></select></Field>
+                  <Field label="Authentication" evidence={evidence.authentication}><select aria-label="Authentication" value={draft.authentication} onChange={(event) => update("authentication", event.target.value as Draft["authentication"])}><option value="">Confirm…</option><option value="none">None</option><option value="optional">Optional</option><option value="required">Required</option></select></Field>
                 </div>
               </div>
 
               <div className="intake-section">
                 <div className="intake-section-title"><GitBranch size={15} /><span><strong>Repository context</strong><small>Documentation and catalog relationships</small></span></div>
                 <div className="intake-form-grid">
-                  <Field label="Documentation directory" evidence={evidence.docsPath}><input value={draft.docsPath} onChange={(event) => update("docsPath", event.target.value)} placeholder="docs" /></Field>
-                  <Field label="Depends on" evidence={evidence.dependsOn}><input value={draft.dependsOn} onChange={(event) => update("dependsOn", event.target.value)} placeholder="service:inventory, api:pricing" /></Field>
+                  <Field label="Documentation directory" evidence={evidence.docsPath}><input aria-label="Documentation directory" value={draft.docsPath} onChange={(event) => update("docsPath", event.target.value)} placeholder="docs" /></Field>
+                  <Field label="Depends on" evidence={evidence.dependsOn}><input aria-label="Depends on" value={draft.dependsOn} onChange={(event) => update("dependsOn", event.target.value)} placeholder="service:inventory, api:pricing" /></Field>
                 </div>
               </div>
 
@@ -294,7 +153,7 @@ export function ApplicationIntake() {
 
               <footer className="intake-commit-bar">
                 <div>
-                  {error ? <span className="error" role="alert"><AlertTriangle size={14} />{error}</span> : <span><Check size={14} />No repository changes occur until you open the pull request.</span>}
+                  {missing.length ? <span className="error" role="status"><AlertTriangle size={14} />Review required: {missing.join(", ")}</span> : proposalError ? <span className="error" role="alert"><AlertTriangle size={14} />{proposalError}</span> : <span><Check size={14} />No repository changes occur until you open the pull request.</span>}
                   {result?.url && <a href={result.url} target="_blank" rel="noopener">Pull request #{result.number} opened <ExternalLink size={12} /></a>}
                   {result?.alreadyCataloged && <span>Metadata already exists. Scan again to refresh the queue.</span>}
                 </div>
