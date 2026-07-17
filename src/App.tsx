@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useState } from "react";
+import { useEffect, useMemo, useRef, useState } from "react";
 import {
   Activity,
   ArrowRight,
@@ -16,6 +16,7 @@ import {
   GitBranch,
   LayoutGrid,
   Link2,
+  LogOut,
   Menu,
   Megaphone,
   Moon,
@@ -361,6 +362,7 @@ function Sidebar({
   user,
   counts,
   name,
+  onLogout,
 }: {
   view: View;
   setView: (v: View) => void;
@@ -371,7 +373,29 @@ function Sidebar({
   user: User | null;
   counts: { services: number; teams: number; users: number };
   name: string;
+  onLogout: () => Promise<void>;
 }) {
+  const [profileOpen, setProfileOpen] = useState(false);
+  const [signingOut, setSigningOut] = useState(false);
+  const [profileError, setProfileError] = useState("");
+  const profileMenuRef = useRef<HTMLDivElement>(null);
+  useEffect(() => {
+    if (!profileOpen) return;
+    const closeOutside = (event: PointerEvent) => {
+      if (!profileMenuRef.current?.contains(event.target as Node))
+        setProfileOpen(false);
+    };
+    const closeWithKeyboard = (event: KeyboardEvent) => {
+      if (event.key === "Escape") setProfileOpen(false);
+    };
+    addEventListener("pointerdown", closeOutside);
+    addEventListener("keydown", closeWithKeyboard);
+    return () => {
+      removeEventListener("pointerdown", closeOutside);
+      removeEventListener("keydown", closeWithKeyboard);
+    };
+  }, [profileOpen]);
+  useEffect(() => setProfileOpen(false), [collapsed, open, user?.id]);
   const go = (v: View) => {
     setView(v);
     setOpen(false);
@@ -475,16 +499,62 @@ function Sidebar({
         )}
         <div className="side-bottom">
           {user ? (
-            <button className="profile">
-              <div className="avatar">{initials(user.name)}</div>
-              <div>
-                <strong>{user.name}</strong>
-                <small>
-                  {user.role === "admin" ? "Administrator" : "Member"}
-                </small>
-              </div>
-              <ChevronDown size={16} />
-            </button>
+            <div className="profile-menu-wrap" ref={profileMenuRef}>
+              <button
+                className="profile"
+                aria-haspopup="menu"
+                aria-expanded={profileOpen}
+                onClick={() => {
+                  setProfileError("");
+                  setProfileOpen((value) => !value);
+                }}
+              >
+                <div className="avatar">{initials(user.name)}</div>
+                <div>
+                  <strong>{user.name}</strong>
+                  <small>
+                    {user.role === "admin" ? "Administrator" : "Member"}
+                  </small>
+                </div>
+                <ChevronDown
+                  className={
+                    profileOpen ? "profile-chevron open" : "profile-chevron"
+                  }
+                  size={16}
+                />
+              </button>
+              {profileOpen && (
+                <div className="profile-menu" role="menu">
+                  <div className="profile-menu-identity">
+                    <strong>{user.name}</strong>
+                    <small>@{user.login}</small>
+                  </div>
+                  {profileError && (
+                    <p className="profile-menu-error" role="alert">
+                      {profileError}
+                    </p>
+                  )}
+                  <button
+                    role="menuitem"
+                    disabled={signingOut}
+                    onClick={async () => {
+                      setSigningOut(true);
+                      try {
+                        await onLogout();
+                        setProfileOpen(false);
+                      } catch {
+                        setProfileError("Sign out failed. Try again.");
+                      } finally {
+                        setSigningOut(false);
+                      }
+                    }}
+                  >
+                    <LogOut size={15} />
+                    {signingOut ? "Signing out…" : "Sign out"}
+                  </button>
+                </div>
+              )}
+            </div>
           ) : (
             <button
               className="profile sign-in"
@@ -2300,6 +2370,15 @@ export function App() {
     history.pushState({}, "", `/catalog/${encodeURIComponent(service.name)}`);
     setViewState("service");
   };
+  const logout = async () => {
+    const response = await fetch("/api/auth/logout", { method: "POST" });
+    if (!response.ok) throw new Error("Sign out failed");
+    history.replaceState({}, "", "/");
+    setSelectedService(null);
+    setSelectedTeam(null);
+    setViewState("overview");
+    await refresh();
+  };
   const openTeam = (team: Team) => {
     setSelectedTeam(team);
     history.pushState({}, "", `/teams/${encodeURIComponent(team.name)}`);
@@ -2407,6 +2486,7 @@ export function App() {
         setCollapsed={setCollapsed}
         user={user}
         name={portal.general.name}
+        onLogout={logout}
         counts={{
           services: data.services.length,
           teams: data.teams.length,

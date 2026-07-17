@@ -29,6 +29,8 @@ Your primary team is stored in Perongen and becomes the default after sign-in. I
 
 Use the sun or moon control in the header to switch appearance. The choice is stored in the browser. On smaller screens, the navigation moves into the menu button and preserves the same destinations.
 
+Select your name at the bottom of the navigation to open the account menu. **Sign out** ends the GitHub session and returns to the public overview. The menu closes with `Escape` or when another part of the page is selected.
+
 ## Search behavior
 
 Catalog and people search operate on the synchronized data already loaded by the portal. They do not query GitHub live. If a recently merged metadata change is missing, wait for the webhook delivery or ask an administrator to synchronize the catalog.
