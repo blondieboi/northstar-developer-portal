@@ -51,6 +51,11 @@ describe('portal configuration',()=>{
     expect(()=>validateConfig({...configured,integrations:{plugins:[{id:'github-actions',enabled:true,config:{lookbackDays:0,maximumRuns:10}}]}})).toThrow()
     expect(()=>validateConfig({...configured,scorecards:{cards:[{...defaults.scorecards.cards[0],rules:[{...defaults.scorecards.cards[0].rules[0],source:{kind:'plugin',plugin:'unknown'}}]}]}})).toThrow('Unknown plugin')
   })
+  it('validates remediation guidance and optional automatic fix values',()=>{
+    const configured={...defaults,scorecards:{cards:[{...defaults.scorecards.cards[0],rules:[{...defaults.scorecards.cards[0].rules[0],remediation:{guidance:'Assign the accountable team.',docsUrl:'https://docs.example.com/ownership',suggestedValue:'team:platform'}}]}]}}
+    expect(validateConfig(configured).scorecards.cards[0].rules[0].remediation?.suggestedValue).toBe('team:platform')
+    expect(()=>validateConfig({...configured,scorecards:{cards:[{...defaults.scorecards.cards[0],rules:[{...defaults.scorecards.cards[0].rules[0],remediation:{guidance:'',docsUrl:'not-a-url'}}]}]}})).toThrow()
+  })
   it('requires one primary card and unique scorecard ids',()=>{
     const second={...defaults.scorecards.cards[0],id:'delivery',title:'Delivery',primary:false,rules:[]}
     expect(validateConfig({...defaults,scorecards:{cards:[defaults.scorecards.cards[0],second]}}).scorecards.cards).toHaveLength(2)

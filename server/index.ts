@@ -5,18 +5,32 @@ import { existsSync } from "node:fs";
 import { resolve } from "node:path";
 import {
   catalogSummary,
+  campaignTargets,
+  createMetadataCampaign,
+  createWaiver,
+  decideWaiver,
+  findServiceByName,
+  graphRows,
   listAuditEvents,
+  listMetadataCampaigns,
+  listServiceDocuments,
   listServiceScoreHistory,
   listServices,
   listTeams,
   listUsers,
+  listWaivers,
   listWebhooks,
   migrate,
   onboardingStats,
+  portalAnalytics,
   recordAction,
+  recordPortalEvent,
   recordSync,
   recordWebhook,
   setUserPrimaryTeam,
+  updateCampaignFromPullRequest,
+  updateCampaignStatus,
+  updateCampaignTarget,
   upsertUser,
   webhookSeen,
 } from "./db.js";
@@ -41,6 +55,7 @@ import {
   type ConfigSection,
 } from "./config.js";
 import {
+  documentationChanged,
   metadataChanged,
   pluginRefreshRequested,
   verifyWebhookSignature,
@@ -64,8 +79,33 @@ import {
   refreshAllServicePlugins,
   refreshRepositoryPlugins,
 } from "./plugins/runtime.js";
+import {
+  buildGraph,
+  campaignPreview,
+  mapWithConcurrency,
+  openMetadataPullRequest,
+  operationalSnapshot,
+} from "./platform.js";
+import { backfillServiceDocuments } from "./documents.js";
 
 const server = Fastify({ logger: true });
+async function reconcileCampaignStatus(id: string | number) {
+  const [campaign] = await listMetadataCampaigns(id);
+  const targets = campaign?.targets || [];
+  const complete =
+    targets.length > 0 &&
+    targets.every((target: any) =>
+      ["completed", "excluded"].includes(target.status),
+    );
+  await updateCampaignStatus(id, complete ? "completed" : "active");
+  return complete;
+}
+const validCampaignPath = (path: unknown) =>
+  typeof path === "string" &&
+  /^(metadata|spec)(\.[A-Za-z][A-Za-z0-9_-]*)+$/.test(path) &&
+  !path
+    .split(".")
+    .some((part) => ["__proto__", "prototype", "constructor"].includes(part));
 await server.register(cors, { origin: true });
 server.removeContentTypeParser("application/json");
 server.addContentTypeParser(
@@ -97,6 +137,9 @@ await initializeGitConfig(async (changed, config) => {
     });
 });
 startConfigPolling();
+queueMicrotask(() => {
+  backfillServiceDocuments().catch((error) => server.log.error(error));
+});
 
 server.get("/api/health", async () => ({
   status: getConfigSource().status === "ready" ? "ok" : "degraded",
@@ -107,6 +150,143 @@ server.get("/api/health", async () => ({
 server.get("/api/services", async () => ({
   services: await decorateServicesWithPlugins((await listServices()) || []),
 }));
+server.get("/api/graph", async () => buildGraph(await graphRows()));
+server.get<{ Querystring: { service?: string } }>(
+  "/api/documents",
+  async (request) => ({
+    documents: await listServiceDocuments(request.query.service),
+  }),
+);
+server.get<{ Params: { serviceName: string } }>(
+  "/api/services/:serviceName/operations",
+  async (request, reply) => {
+    const service = await findServiceByName(request.params.serviceName);
+    if (!service) return reply.code(404).send({ error: "Service not found" });
+    const [decorated] = await decorateServicesWithPlugins([service]);
+    return operationalSnapshot(decorated);
+  },
+);
+server.get<{ Querystring: { service?: string } }>(
+  "/api/standards/waivers",
+  async (request) => ({ waivers: await listWaivers(request.query.service) }),
+);
+server.post<{
+  Body: {
+    serviceName: string;
+    scorecardId: string;
+    ruleId: string;
+    reason: string;
+    expiresAt: string;
+  };
+}>(
+  "/api/standards/waivers",
+  { preHandler: requireUser },
+  async (request, reply) => {
+    const service = await findServiceByName(request.body?.serviceName);
+    if (!service) return reply.code(404).send({ error: "Service not found" });
+    if (!request.body.reason?.trim())
+      return reply.code(400).send({ error: "A waiver reason is required" });
+    const expiry = new Date(request.body.expiresAt);
+    if (!Number.isFinite(expiry.getTime()) || expiry <= new Date())
+      return reply
+        .code(400)
+        .send({ error: "Waiver expiry must be in the future" });
+    const user = await currentUser(request);
+    const waiver = await createWaiver({
+      serviceId: service.id,
+      scorecardId: request.body.scorecardId,
+      ruleId: request.body.ruleId,
+      reason: request.body.reason.trim(),
+      requestedBy: user!.login,
+      expiresAt: expiry.toISOString(),
+    });
+    await recordPortalEvent({
+      eventType: "waiver.requested",
+      actorLogin: user!.login,
+      entityKind: "service",
+      entityKey: service.name,
+      properties: { ruleId: request.body.ruleId },
+    });
+    return reply.code(201).send({ waiver });
+  },
+);
+server.post<{
+  Params: { serviceName: string };
+  Body: { scorecardId: string; ruleId: string };
+}>(
+  "/api/services/:serviceName/remediations",
+  { preHandler: requireUser },
+  async (request, reply) => {
+    const service = await findServiceByName(request.params.serviceName);
+    if (!service) return reply.code(404).send({ error: "Service not found" });
+    const card = getConfig().scorecards.cards.find(
+      (candidate) => candidate.id === request.body?.scorecardId,
+    );
+    const rule = card?.rules.find(
+      (candidate) => candidate.id === request.body?.ruleId,
+    );
+    const remediation = rule?.remediation;
+    if (!rule || !remediation || remediation.suggestedValue === undefined)
+      return reply
+        .code(400)
+        .send({ error: "This rule does not define an automatic metadata fix" });
+    if (rule.source?.kind === "plugin")
+      return reply
+        .code(400)
+        .send({ error: "Provider-backed rules cannot be fixed as metadata" });
+    if (!service.installation_id)
+      return reply
+        .code(400)
+        .send({ error: "Service GitHub installation is unavailable" });
+    const user = await currentUser(request);
+    const pull = await openMetadataPullRequest({
+      installationId: Number(service.installation_id),
+      repository: service.repository,
+      metadataPath: service.metadata_path,
+      fieldPath: rule.path,
+      value: remediation.suggestedValue,
+      title: `chore: satisfy ${rule.title}`,
+      body: `${remediation.guidance}\n\nOpened by @${user!.login} from Perongen standards remediation.`,
+      branchPrefix: `perongen/remediate-${rule.id}`,
+    });
+    await recordPortalEvent({
+      eventType: "remediation.opened",
+      actorLogin: user!.login,
+      entityKind: "service",
+      entityKey: service.name,
+      properties: {
+        ruleId: rule.id,
+        pullRequest: pull.number,
+        alreadySatisfied: pull.alreadySatisfied,
+      },
+    });
+    return reply
+      .code(pull.alreadySatisfied ? 200 : 201)
+      .send({ pullRequest: pull });
+  },
+);
+server.post<{
+  Body: {
+    eventType: string;
+    path?: string;
+    entityKind?: string;
+    entityKey?: string;
+    properties?: Record<string, unknown>;
+  };
+}>("/api/events", async (request, reply) => {
+  if (!request.body?.eventType || request.body.eventType.length > 80)
+    return reply.code(400).send({ error: "Event type is required" });
+  const user = await currentUser(request);
+  await recordPortalEvent({
+    eventType: request.body.eventType,
+    actorLogin: user?.login,
+    path: request.body.path,
+    entityKind: request.body.entityKind,
+    entityKey: request.body.entityKey,
+    properties: request.body.properties || {},
+  });
+  return reply.code(202).send({ status: "recorded" });
+});
 server.get<{ Params: { serviceName: string } }>(
   "/api/services/:serviceName/score-history",
   async (request) => ({
@@ -274,12 +454,10 @@ server.post<{ Body?: { installationId?: number } }>(
         process.env.GITHUB_INSTALLATION_ID,
     );
     if (!Number.isInteger(installationId) || installationId <= 0)
-      return reply
-        .code(400)
-        .send({
-          error:
-            "A GitHub installation ID must be saved in Catalog settings or GITHUB_INSTALLATION_ID",
-        });
+      return reply.code(400).send({
+        error:
+          "A GitHub installation ID must be saved in Catalog settings or GITHUB_INSTALLATION_ID",
+      });
     const results = await syncInstallation(installationId);
     return {
       installationId,
@@ -350,6 +528,13 @@ server.post<{ Body: { actionId: string; inputs?: Record<string, string> } }>(
       user?.login,
       action.version,
     );
+    await recordPortalEvent({
+      eventType: "action.dispatch",
+      actorLogin: user?.login,
+      entityKind: "action",
+      entityKey: action.id,
+      properties: { repository: action.repository, version: action.version },
+    });
     return reply.code(202).send({ status: "dispatched" });
   },
 );
@@ -442,11 +627,9 @@ server.patch<{
       request.body.role === "member" &&
       getBreakGlassAdmins().has(request.params.login.toLowerCase())
     )
-      return reply
-        .code(400)
-        .send({
-          error: "Deployment break-glass administrators cannot be demoted",
-        });
+      return reply.code(400).send({
+        error: "Deployment break-glass administrators cannot be demoted",
+      });
     try {
       const user = await currentUser(request);
       const admins = new Set(
@@ -480,6 +663,204 @@ server.get("/api/admin/audit", { preHandler: requireAdmin }, async () => ({
 server.get("/api/admin/webhooks", { preHandler: requireAdmin }, async () => ({
   deliveries: await listWebhooks(),
 }));
+server.get("/api/admin/campaigns", { preHandler: requireAdmin }, async () => ({
+  campaigns: await listMetadataCampaigns(),
+}));
+server.get<{ Params: { id: string } }>(
+  "/api/admin/campaigns/:id",
+  { preHandler: requireAdmin },
+  async (request, reply) => {
+    const [campaign] = await listMetadataCampaigns(request.params.id);
+    return campaign
+      ? { campaign }
+      : reply.code(404).send({ error: "Campaign not found" });
+  },
+);
+server.post<{
+  Body: {
+    fieldPath: string;
+    desiredValue?: unknown;
+    strategy?: "explicit" | "infer";
+    filters?: Record<string, string[]>;
+  };
+}>(
+  "/api/admin/campaigns/preview",
+  { preHandler: requireAdmin },
+  async (request, reply) => {
+    if (!validCampaignPath(request.body?.fieldPath))
+      return reply
+        .code(400)
+        .send({
+          error: "Metadata field must be a safe metadata.* or spec.* path",
+        });
+    if (
+      request.body.strategy !== "infer" &&
+      request.body.desiredValue === undefined
+    )
+      return reply.code(400).send({ error: "Desired value is required" });
+    const targets = campaignPreview((await listServices()) || [], request.body);
+    return { targets, targetCount: targets.length };
+  },
+);
+server.post<{
+  Body: {
+    title: string;
+    description?: string;
+    fieldPath: string;
+    desiredValue?: unknown;
+    strategy?: "explicit" | "infer";
+    filters?: Record<string, string[]>;
+  };
+}>(
+  "/api/admin/campaigns",
+  { preHandler: requireAdmin },
+  async (request, reply) => {
+    if (
+      !request.body?.title?.trim() ||
+      !validCampaignPath(request.body?.fieldPath)
+    )
+      return reply
+        .code(400)
+        .send({
+          error: "Campaign title and a safe metadata field are required",
+        });
+    if (
+      request.body.strategy !== "infer" &&
+      request.body.desiredValue === undefined
+    )
+      return reply.code(400).send({ error: "Desired value is required" });
+    const targets = campaignPreview((await listServices()) || [], request.body);
+    if (!targets.length)
+      return reply
+        .code(400)
+        .send({ error: "No services require this metadata change" });
+    const user = await currentUser(request);
+    const campaign = await createMetadataCampaign({
+      title: request.body.title.trim(),
+      description: request.body.description?.trim() || "",
+      fieldPath: request.body.fieldPath,
+      desiredValue:
+        request.body.strategy === "infer"
+          ? { strategy: "infer" }
+          : request.body.desiredValue,
+      filters: request.body.filters || {},
+      createdBy: user!.login,
+      targets: targets as any,
+    });
+    await recordPortalEvent({
+      eventType: "campaign.created",
+      actorLogin: user!.login,
+      entityKind: "campaign",
+      entityKey: String((campaign as any).id),
+      properties: { targets: targets.length },
+    });
+    return reply.code(201).send({ campaign, targets });
+  },
+);
+server.post<{ Params: { id: string } }>(
+  "/api/admin/campaigns/:id/launch",
+  { preHandler: requireAdmin },
+  async (request, reply) => {
+    const [campaign] = await listMetadataCampaigns(request.params.id);
+    if (!campaign) return reply.code(404).send({ error: "Campaign not found" });
+    const targets = await campaignTargets(request.params.id);
+    if (!targets.length)
+      return reply.code(400).send({ error: "No pending or failed targets" });
+    await updateCampaignStatus(request.params.id, "active");
+    const user = await currentUser(request);
+    const results = await mapWithConcurrency(targets, 4, async (target) => {
+      try {
+        if (!target.installation_id)
+          throw new Error(
+            "GitHub installation is unavailable for this service",
+          );
+        const pull = await openMetadataPullRequest({
+          installationId: Number(target.installation_id),
+          repository: target.repository,
+          metadataPath: target.metadata_path,
+          fieldPath: campaign.field_path,
+          value: target.after_value,
+          title: `chore: ${campaign.title}`,
+          body: `${campaign.description || "Organization-wide metadata maintenance."}\n\nCampaign #${campaign.id} opened by @${user!.login}.`,
+          branchPrefix: `perongen/campaign-${campaign.id}`,
+        });
+        return await updateCampaignTarget(target.id, {
+          status: pull.alreadySatisfied ? "completed" : "pr-open",
+          prNumber: pull.number,
+          prUrl: pull.url,
+          branch: pull.branch,
+        });
+      } catch (error) {
+        return await updateCampaignTarget(target.id, {
+          status: "failed",
+          error: (error as Error).message,
+        });
+      }
+    });
+    await recordPortalEvent({
+      eventType: "campaign.launched",
+      actorLogin: user!.login,
+      entityKind: "campaign",
+      entityKey: request.params.id,
+      properties: {
+        opened: results.filter((result: any) => result.status === "pr-open")
+          .length,
+        failed: results.filter((result: any) => result.status === "failed")
+          .length,
+      },
+    });
+    await reconcileCampaignStatus(request.params.id);
+    return { results };
+  },
+);
+server.patch<{
+  Params: { id: string; targetId: string };
+  Body: { excluded: boolean; reason?: string };
+}>(
+  "/api/admin/campaigns/:id/targets/:targetId",
+  { preHandler: requireAdmin },
+  async (request, reply) => {
+    if (request.body?.excluded && !request.body.reason?.trim())
+      return reply.code(400).send({ error: "Exclusions require a reason" });
+    const target = await updateCampaignTarget(request.params.targetId, {
+      status: request.body?.excluded ? "excluded" : "pending",
+      exclusionReason: request.body?.excluded
+        ? request.body.reason?.trim()
+        : null,
+    });
+    await reconcileCampaignStatus(request.params.id);
+    return { target };
+  },
+);
+server.get("/api/admin/waivers", { preHandler: requireAdmin }, async () => ({
+  waivers: await listWaivers(),
+}));
+server.patch<{
+  Params: { id: string };
+  Body: { status: "approved" | "rejected" };
+}>(
+  "/api/admin/waivers/:id",
+  { preHandler: requireAdmin },
+  async (request, reply) => {
+    if (!["approved", "rejected"].includes(request.body?.status))
+      return reply.code(400).send({ error: "Decision is invalid" });
+    const user = await currentUser(request);
+    return {
+      waiver: await decideWaiver(
+        request.params.id,
+        request.body.status,
+        user!.login,
+      ),
+    };
+  },
+);
+server.get<{ Querystring: { days?: string } }>(
+  "/api/admin/analytics",
+  { preHandler: requireAdmin },
+  async (request) => ({
+    analytics: await portalAnalytics(Number(request.query.days || 30)),
+  }),
+);
 
 server.post("/api/github/webhook", async (request, reply) => {
   const secret = process.env.GITHUB_WEBHOOK_SECRET;
@@ -499,6 +880,27 @@ server.post("/api/github/webhook", async (request, reply) => {
   if (await webhookSeen(deliveryId))
     return reply.code(202).send({ status: "duplicate" });
   try {
+    if (event === "pull_request" && repository && body.pull_request?.number) {
+      const campaignId = await updateCampaignFromPullRequest({
+        repository,
+        prNumber: Number(body.pull_request.number),
+        merged: Boolean(body.pull_request.merged),
+        closed: body.action === "closed",
+      });
+      if (campaignId) {
+        await reconcileCampaignStatus(campaignId);
+        await recordWebhook({
+          deliveryId,
+          event,
+          action: "campaign.update",
+          repository,
+          installationId,
+          status: body.pull_request.merged ? "completed" : "applied",
+          message: `Campaign #${campaignId} target updated`,
+        });
+        return reply.code(202).send({ status: "applied" });
+      }
+    }
     if (
       event === "push" &&
       configPushMatches(body) &&
@@ -521,7 +923,7 @@ server.post("/api/github/webhook", async (request, reply) => {
         getConfig().catalog.serviceMetadataPath,
         getConfig().catalog.teamMetadataPath,
       ];
-      if (metadataChanged(body, paths)) {
+      if (metadataChanged(body, paths) || documentationChanged(body)) {
         const [owner, name] = repository.split("/");
         const result = await syncRepository(installationId, owner, name);
         await recordSync(
@@ -532,7 +934,9 @@ server.post("/api/github/webhook", async (request, reply) => {
         await recordWebhook({
           deliveryId,
           event,
-          action: "metadata.sync",
+          action: documentationChanged(body)
+            ? "catalog-and-documentation.sync"
+            : "metadata.sync",
           repository,
           installationId,
           status: result.status,

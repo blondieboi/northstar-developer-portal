@@ -6,22 +6,22 @@ The GitHub App supplies repository discovery, metadata reads, configuration writ
 
 Create a GitHub App owned by the organization that owns the catalog repositories. Configure these repository permissions:
 
-| Permission | Access | Purpose |
-| --- | --- | --- |
-| Contents | Read and write | Read catalog metadata and commit canonical configuration |
-| Metadata | Read | Discover installed repositories |
-| Actions | Write | Read workflow activity and dispatch configured workflows |
-| Pull requests | Read | Build review queues and stale pull request signals |
-| Issues | Read | Measure maintenance backlog and issue freshness |
-| Deployments | Read | Read environment deployment status |
-| Administration | Read | Inspect default-branch protection |
-| Dependabot alerts | Read | Report vulnerable dependency alerts |
-| Code scanning alerts | Read | Report code-scanning findings |
-| Secret scanning alerts | Read | Report exposed-secret findings |
+| Permission             | Access         | Purpose                                                                       |
+| ---------------------- | -------------- | ----------------------------------------------------------------------------- |
+| Contents               | Read and write | Read catalog metadata and commit canonical configuration                      |
+| Metadata               | Read           | Discover installed repositories                                               |
+| Actions                | Write          | Read workflow activity and dispatch configured workflows                      |
+| Pull requests          | Read and write | Build review queues and open metadata campaign or standards-fix pull requests |
+| Issues                 | Read           | Measure maintenance backlog and issue freshness                               |
+| Deployments            | Read           | Read environment deployment status                                            |
+| Administration         | Read           | Inspect default-branch protection                                             |
+| Dependabot alerts      | Read           | Report vulnerable dependency alerts                                           |
+| Code scanning alerts   | Read           | Report code-scanning findings                                                 |
+| Secret scanning alerts | Read           | Report exposed-secret findings                                                |
 
 Restricted security or repository-policy endpoints appear as unavailable signals instead of failing the complete plugin refresh. The service dossier explains when the GitHub App needs more access.
 
-Subscribe the App to **Push**, **Workflow run**, **Pull request**, **Deployment**, **Deployment status**, **Issues**, and **Release** events. Push events synchronize configuration and metadata. Repository events refresh plugin data for the affected service.
+Subscribe the App to **Push**, **Workflow run**, **Pull request**, **Deployment**, **Deployment status**, **Issues**, and **Release** events. Push events synchronize configuration and metadata. Pull-request events update campaign completion when a generated change is merged or closed. Other repository events refresh plugin data for the affected service.
 
 ## Configure URLs
 

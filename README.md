@@ -1,6 +1,6 @@
 # Perongen
 
-A simple, self-hosted developer portal with a software catalog, ownership metadata, configurable scorecards, and GitHub workflow-backed self-service actions.
+A self-hosted developer portal with a software catalog, ownership and dependency metadata, repository documentation, operational context, configurable standards, GitHub-native remediation, and workflow-backed self-service actions.
 
 ## Run locally
 
@@ -38,7 +38,7 @@ Scorecards, plugins, and workflow actions use visual builders. GitHub push and w
 1. Start PostgreSQL with `docker compose up -d postgres` (port `5440` by default).
 2. Copy `.env.example` to `.env` and configure `DATABASE_URL`.
 3. Create a GitHub App and add its App ID and private key to `.env`.
-4. Grant repository **Contents: read and write** and **Actions: write** permissions, then install the App on both the configuration and catalog repositories.
+4. Grant repository **Contents: read and write**, **Pull requests: read and write**, and **Actions: write** permissions, then install the App on both the configuration and catalog repositories.
 5. Set the GitHub App's **User authorization callback URL** (or an OAuth App's **Authorization callback URL**) to `${PUBLIC_URL}/api/auth/callback` exactly. For the default local setup, this is `http://localhost:4000/api/auth/callback`.
 6. Set the webhook URL to `${PUBLIC_URL}/api/github/webhook`, provide the same secret in `GITHUB_WEBHOOK_SECRET`, and subscribe to **Push** and **Workflow run** events.
 7. Commit all seven files from `config.example/` to the configured directory. At least one administrator must be listed in `access.yaml` or `GITHUB_ADMIN_LOGINS`.
@@ -73,6 +73,19 @@ spec:
   links:
     - name: Documentation
       url: https://docs.example.com/checkout
+  dependsOn:
+    - service:inventory-api
+  providesApis:
+    - api:checkout
+  resources:
+    - name: checkout-db
+      type: database
+      relation: reads-writes
+  docsPath: docs
+  operational:
+    onCall: checkout-primary
+    runbookUrl: https://docs.example.com/checkout/runbook
+    dashboardUrl: https://metrics.example.com/checkout
 ```
 
 Team membership is read from `.portal/team.yaml` in an installed catalog repository:
@@ -106,7 +119,12 @@ spec:
 - Engineering inbox for delivery, security, catalog, standards, and ownership work
 - Global command palette across services, teams, people, actions, and tools
 - Shareable service and team URLs with browser navigation
-- Scorecard change history and catalog metadata remediation guidance
+- Metadata campaigns with dry-run diffs, inferred values, GitHub pull requests, retries, progress, and documented exclusions
+- Software relationship map across services, systems, APIs, and infrastructure resources
+- Scorecard change history, fix PRs, remediation guidance, and expiring waivers
+- Operational service cockpits with deployment state, incidents, security findings, links, and a normalized change timeline
+- Repository-owned Markdown documentation with global search and freshness signals
+- Portal effectiveness analytics for adoption, search gaps, actions, and campaign outcomes
 - GitHub App installation-token authentication
 - Repository discovery and `.portal/service.yaml` ingestion
 - Team and people directories from `.portal/team.yaml` and GitHub profiles

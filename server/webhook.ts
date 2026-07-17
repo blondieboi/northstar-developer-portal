@@ -22,6 +22,14 @@ export function metadataChanged(payload: any, paths: string[]) {
   ];
   return changed.some((path: string) => paths.includes(path));
 }
+export function documentationChanged(payload: any) {
+  const changed = (payload.commits || []).flatMap((commit: any) => [
+    ...(commit.added || []),
+    ...(commit.modified || []),
+    ...(commit.removed || []),
+  ]);
+  return changed.some((path: string) => /(^|\/)readme\.md$|\.md$/i.test(path));
+}
 const pluginEvents = new Set([
   "workflow_run",
   "pull_request",

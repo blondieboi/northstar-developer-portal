@@ -4,16 +4,20 @@ Perongen uses one stable navigation model on desktop and mobile. The available d
 
 ## Main navigation
 
-| Destination | Use it to |
-| --- | --- |
-| Overview | See active-team responsibility, standards coverage, and recent changes |
-| Catalog | Search and inspect registered services |
-| Scorecards | Choose a named standards view and compare metadata or plugin-backed checks |
-| Actions | Run published GitHub workflows and inspect dispatch history |
-| Tools | Open shared engineering systems |
-| Teams | Browse ownership groups and their services |
-| People | Find GitHub identities and team memberships |
-| Settings | Administer the portal, including integration plugins; visible only to administrators |
+| Destination   | Use it to                                                                                            |
+| ------------- | ---------------------------------------------------------------------------------------------------- |
+| Overview      | See active-team responsibility, standards coverage, and recent changes                               |
+| Catalog       | Search and inspect registered services                                                               |
+| Software map  | Trace service, system, API, and infrastructure dependencies and impact paths                         |
+| Documentation | Search repository-owned Markdown across services                                                     |
+| Scorecards    | Choose a named standards view and compare metadata or plugin-backed checks                           |
+| Actions       | Run published GitHub workflows and inspect dispatch history                                          |
+| Tools         | Open shared engineering systems                                                                      |
+| Teams         | Browse ownership groups and their services                                                           |
+| People        | Find GitHub identities and team memberships                                                          |
+| Settings      | Administer the portal, including integration plugins; visible only to administrators                 |
+| Campaigns     | Preview and coordinate metadata changes through GitHub pull requests; visible only to administrators |
+| Analytics     | Measure adoption, discovery gaps, and remediation outcomes; visible only to administrators           |
 
 ## Team context
 

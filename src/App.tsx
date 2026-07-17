@@ -3,6 +3,7 @@ import {
   Activity,
   ArrowRight,
   BellRing,
+  BookOpen,
   Box,
   Check,
   CheckCircle2,
@@ -16,7 +17,9 @@ import {
   LayoutGrid,
   Link2,
   Menu,
+  Megaphone,
   Moon,
+  Network,
   PanelLeftClose,
   PanelLeftOpen,
   Plus,
@@ -29,6 +32,7 @@ import {
   Users,
   X,
   Zap,
+  BarChart3,
 } from "lucide-react";
 import { ConfiguredActions, ConfiguredScorecards } from "./ControlPlane";
 import { OnboardingGate } from "./Onboarding";
@@ -43,11 +47,19 @@ import { PluginServiceSections, type PublicPlugin } from "./plugins/registry";
 import { CommandPalette } from "./CommandPalette";
 import { EngineeringInbox } from "./EngineeringInbox";
 import { ScoreHistory } from "./ScoreHistory";
+import { ResourceGraph } from "./ResourceGraph";
+import { DocumentationHub, ServiceDocumentation } from "./DocumentationHub";
+import { ServiceOperations } from "./ServiceOperations";
+import { StandardsChecks } from "./StandardsRemediation";
+import { AnalyticsPage, CampaignsPage } from "./AdminPlatform";
+import { trackPortalEvent } from "./telemetry";
 
 type View =
   | "overview"
   | "inbox"
   | "catalog"
+  | "map"
+  | "docs"
   | "service"
   | "team"
   | "scorecards"
@@ -56,6 +68,8 @@ type View =
   | "teams"
   | "people"
   | "integrations"
+  | "campaigns"
+  | "analytics"
   | "settings";
 type User = {
   id: string;
@@ -366,6 +380,8 @@ function Sidebar({
     ["overview", "Overview", LayoutGrid],
     ["inbox", "Engineering inbox", BellRing],
     ["catalog", "Catalog", Box, counts.services],
+    ["map", "Software map", Network],
+    ["docs", "Documentation", BookOpen],
     ["scorecards", "Scorecards", ShieldCheck],
     ["actions", "Actions", Zap],
     ["tools", "Tools", Link2],
@@ -438,6 +454,22 @@ function Sidebar({
             >
               <Settings size={18} />
               <span>Settings</span>
+            </button>
+            <button
+              title={collapsed ? "Campaigns" : undefined}
+              className={view === "campaigns" ? "nav-link active" : "nav-link"}
+              onClick={() => go("campaigns")}
+            >
+              <Megaphone size={18} />
+              <span>Campaigns</span>
+            </button>
+            <button
+              title={collapsed ? "Analytics" : undefined}
+              className={view === "analytics" ? "nav-link active" : "nav-link"}
+              onClick={() => go("analytics")}
+            >
+              <BarChart3 size={18} />
+              <span>Analytics</span>
             </button>
           </div>
         )}
@@ -1114,6 +1146,7 @@ function ServiceWorkspace({
   types,
   plugins,
   navigate,
+  signedIn,
 }: {
   service: Service;
   cards: ScorecardDefinition[];
@@ -1121,6 +1154,7 @@ function ServiceWorkspace({
   types: ServiceType[];
   plugins: PublicPlugin[];
   navigate: (view: View) => void;
+  signedIn: boolean;
 }) {
   const links = Array.isArray(service.metadata?.spec?.links)
     ? service.metadata.spec.links
@@ -1210,27 +1244,12 @@ function ServiceWorkspace({
                 ))}
             </div>
             {checks.length ? (
-              <div className="service-checks">
-                {checks.map((check) => {
-                  const pass = evaluateRule(
-                    service.metadata,
-                    check,
-                    service.plugins,
-                  );
-                  return (
-                    <div className="service-check" key={check.id}>
-                      <span className={pass ? "check-mark pass" : "check-mark"}>
-                        {pass ? <Check size={14} /> : <X size={14} />}
-                      </span>
-                      <div>
-                        <strong>{check.title}</strong>
-                        <small>{check.description || check.path}</small>
-                      </div>
-                      <em>{pass ? "Passing" : "Needs attention"}</em>
-                    </div>
-                  );
-                })}
-              </div>
+              <StandardsChecks
+                service={service}
+                scorecardId={primary?.id || "metadata-quality"}
+                checks={checks}
+                signedIn={signedIn}
+              />
             ) : (
               <div className="record-empty">
                 <ShieldCheck size={17} />
@@ -1248,6 +1267,8 @@ function ServiceWorkspace({
             serviceName={service.name}
             currentScore={service.score}
           />
+          <ServiceOperations serviceName={service.name} />
+          <ServiceDocumentation serviceName={service.name} />
           <PluginServiceSections
             plugins={service.plugins}
             states={service.pluginStates}
@@ -2061,12 +2082,16 @@ const routeForView: Record<Exclude<View, "service" | "team">, string> = {
   overview: "/",
   inbox: "/inbox",
   catalog: "/catalog",
+  map: "/map",
+  docs: "/docs",
   scorecards: "/scorecards",
   actions: "/actions",
   tools: "/tools",
   teams: "/teams",
   people: "/people",
   integrations: "/integrations",
+  campaigns: "/campaigns",
+  analytics: "/analytics",
   settings: "/settings",
 };
 
@@ -2117,6 +2142,8 @@ export function App() {
     overview: "Overview",
     inbox: "Engineering inbox",
     catalog: "Catalog",
+    map: "Software map",
+    docs: "Documentation",
     service: selectedService?.name || "Service",
     team: selectedTeam?.title || activeTeam?.title || "Team",
     scorecards: "Scorecards",
@@ -2125,6 +2152,8 @@ export function App() {
     teams: "Teams",
     people: "People",
     integrations: "Integrations",
+    campaigns: "Metadata campaigns",
+    analytics: "Portal analytics",
     settings: "Settings",
   };
   const navigate = (next: View, replace = false) => {
@@ -2216,6 +2245,19 @@ export function App() {
     );
   }, [portal.general.name, portal.general.accentColor]);
   useEffect(() => {
+    trackPortalEvent("page.view", {
+      path: location.pathname,
+      entityKind:
+        view === "service" ? "service" : view === "team" ? "team" : "page",
+      entityKey:
+        view === "service"
+          ? selectedService?.name
+          : view === "team"
+            ? selectedTeam?.name
+            : view,
+    });
+  }, [view, selectedService?.name, selectedTeam?.name]);
+  useEffect(() => {
     if (!memberTeams.length) return;
     if (
       !activeTeamName ||
@@ -2293,6 +2335,13 @@ export function App() {
             activity={data.activity}
             openService={openService}
           />
+        ) : view === "map" ? (
+          <ResourceGraph services={data.services} openService={openService} />
+        ) : view === "docs" ? (
+          <DocumentationHub
+            services={data.services}
+            openService={openService}
+          />
         ) : view === "service" && selectedService ? (
           <ServiceWorkspace
             service={selectedService}
@@ -2301,6 +2350,7 @@ export function App() {
             types={portal.catalog.types}
             plugins={portal.integrations.plugins}
             navigate={navigate}
+            signedIn={Boolean(user)}
           />
         ) : view === "service" ? (
           <div className="page">
@@ -2381,6 +2431,14 @@ export function App() {
           <PeoplePage users={data.users} />
         ) : view === "settings" && user?.role === "admin" ? (
           <VisualSettings onRefresh={refresh} />
+        ) : view === "campaigns" && user?.role === "admin" ? (
+          <CampaignsPage
+            services={data.services}
+            tiers={portal.catalog.tiers}
+            types={portal.catalog.types}
+          />
+        ) : view === "analytics" && user?.role === "admin" ? (
+          <AnalyticsPage />
         ) : (
           <Integrations refresh={refresh} />
         )}

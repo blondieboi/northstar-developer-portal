@@ -1,8 +1,10 @@
 import {
   Box,
+  BookOpen,
   CircleUserRound,
   FileCode2,
   Link2,
+  Network,
   Search,
   ShieldCheck,
   Users,
@@ -10,6 +12,7 @@ import {
   Zap,
 } from "lucide-react";
 import { useEffect, useMemo, useRef, useState } from "react";
+import { trackPortalEvent } from "./telemetry";
 
 type Result = {
   id: string;
@@ -104,6 +107,22 @@ export function CommandPalette({
           run: () => navigate("tools"),
         })),
         {
+          id: "page-map",
+          kind: "Page",
+          title: "Software map",
+          subtitle: "Dependencies, APIs, systems, and resources",
+          icon: Network,
+          run: () => navigate("map"),
+        },
+        {
+          id: "page-docs",
+          kind: "Page",
+          title: "Documentation",
+          subtitle: "Repository-owned engineering knowledge",
+          icon: BookOpen,
+          run: () => navigate("docs"),
+        },
+        {
           id: "page-inbox",
           kind: "Page",
           title: "Engineering inbox",
@@ -139,6 +158,18 @@ export function CommandPalette({
     ],
   );
   useEffect(() => setActive(0), [query]);
+  useEffect(() => {
+    if (!open || query.trim().length < 2 || results.length) return;
+    const timer = setTimeout(
+      () =>
+        trackPortalEvent("search.empty", {
+          path: location.pathname,
+          properties: { query: query.trim().slice(0, 120) },
+        }),
+      800,
+    );
+    return () => clearTimeout(timer);
+  }, [open, query, results.length]);
   useEffect(() => {
     if (!open) return;
     const browse = (event: KeyboardEvent) => {

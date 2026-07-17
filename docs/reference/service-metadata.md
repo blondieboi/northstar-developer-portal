@@ -25,25 +25,51 @@ spec:
       url: https://docs.example.com/checkout
     - name: Dashboard
       url: https://metrics.example.com/checkout
+  dependsOn: [service:inventory-api]
+  providesApis: [api:checkout]
+  consumesApis: [api:pricing]
+  resources:
+    - name: checkout-db
+      type: database
+      relation: reads-writes
+  docsPath: docs
+  operational:
+    onCall: checkout-primary
+    runbookUrl: https://docs.example.com/checkout/runbook
+    dashboardUrl: https://metrics.example.com/checkout
 ```
 
 ## Field reference
 
-| Field | Required | Notes |
-| --- | --- | --- |
-| `apiVersion` | Yes | Accepted as a string; use `northstar.dev/v1` |
-| `kind` | Yes | Must be `Service` |
-| `metadata.name` | Yes | Non-empty stable service identifier |
-| `metadata.title` | No | Human-readable title used in the dossier |
-| `metadata.description` | No | Defaults to an empty string |
-| `metadata.tags` | No | Array of strings retained in stored metadata |
-| `spec.owner` | Yes | Non-empty owner; `team:<name>` connects to team metadata |
-| `spec.lifecycle` | Yes | Must also appear in configured catalog lifecycles |
-| `spec.tier` | No | Stable ID from the configured catalog tiers |
-| `spec.type` | No | Stable ID from the configured catalog service types |
-| `spec.system` | No | Defaults to `Unassigned` in catalog views |
-| `spec.language` | No | Falls back to the repository language, then `Unknown` |
-| `spec.links` | No | Array of name and valid URL pairs |
+| Field                  | Required | Notes                                                                          |
+| ---------------------- | -------- | ------------------------------------------------------------------------------ |
+| `apiVersion`           | Yes      | Accepted as a string; use `northstar.dev/v1`                                   |
+| `kind`                 | Yes      | Must be `Service`                                                              |
+| `metadata.name`        | Yes      | Non-empty stable service identifier                                            |
+| `metadata.title`       | No       | Human-readable title used in the dossier                                       |
+| `metadata.description` | No       | Defaults to an empty string                                                    |
+| `metadata.tags`        | No       | Array of strings retained in stored metadata                                   |
+| `spec.owner`           | Yes      | Non-empty owner; `team:<name>` connects to team metadata                       |
+| `spec.lifecycle`       | Yes      | Must also appear in configured catalog lifecycles                              |
+| `spec.tier`            | No       | Stable ID from the configured catalog tiers                                    |
+| `spec.type`            | No       | Stable ID from the configured catalog service types                            |
+| `spec.system`          | No       | Defaults to `Unassigned` in catalog views                                      |
+| `spec.language`        | No       | Falls back to the repository language, then `Unknown`                          |
+| `spec.links`           | No       | Array of name and valid URL pairs                                              |
+| `spec.dependsOn`       | No       | Entity references consumed by the Software map; unprefixed values are services |
+| `spec.providesApis`    | No       | API references provided by this service                                        |
+| `spec.consumesApis`    | No       | API references consumed by this service                                        |
+| `spec.resources`       | No       | Named infrastructure resources with a type, relation, and optional URL         |
+| `spec.docsPath`        | No       | Repository directory containing Markdown; defaults to `docs`                   |
+| `spec.operational`     | No       | On-call name and optional runbook, dashboard, SLO, and cost URLs               |
+
+## Relationships and resources
+
+Relationship references use `kind:key`, for example `service:inventory-api` or `api:pricing`. The portal persists normalized edges during synchronization and uses them for forward and reverse impact paths. Resource types and relation verbs are open strings so teams can represent organization-specific infrastructure without changing the portal schema.
+
+## Documentation and operations
+
+The root README and Markdown under `spec.docsPath` are indexed during synchronization. `spec.operational` accepts `onCall`, `runbookUrl`, `dashboardUrl`, `sloUrl`, and `costUrl`. These values appear in the service cockpit but never trigger external operations.
 
 ## Ownership
 

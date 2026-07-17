@@ -1049,6 +1049,62 @@ function ScorecardBuilder({
                   <span />
                   Enabled
                 </label>
+                <Field label="How to fix">
+                  <input
+                    value={rule.remediation?.guidance || ""}
+                    placeholder="Explain the smallest safe change"
+                    onChange={(event) =>
+                      updateRule(
+                        index,
+                        "remediation",
+                        event.target.value
+                          ? {
+                              ...(rule.remediation || {}),
+                              guidance: event.target.value,
+                            }
+                          : undefined,
+                      )
+                    }
+                  />
+                </Field>
+                {rule.remediation && (
+                  <>
+                    <Field label="Remediation documentation">
+                      <input
+                        type="url"
+                        value={rule.remediation.docsUrl || ""}
+                        placeholder="https://docs.example.com/standard"
+                        onChange={(event) =>
+                          updateRule(index, "remediation", {
+                            ...rule.remediation,
+                            docsUrl: event.target.value || undefined,
+                          })
+                        }
+                      />
+                    </Field>
+                    {rule.source?.kind !== "plugin" && (
+                      <Field label="Automatic fix value">
+                        <input
+                          value={
+                            rule.remediation.suggestedValue === undefined
+                              ? ""
+                              : String(rule.remediation.suggestedValue)
+                          }
+                          placeholder="Optional value for a GitHub fix PR"
+                          onChange={(event) =>
+                            updateRule(index, "remediation", {
+                              ...rule.remediation,
+                              suggestedValue:
+                                event.target.value === ""
+                                  ? undefined
+                                  : event.target.value,
+                            })
+                          }
+                        />
+                      </Field>
+                    )}
+                  </>
+                )}
                 {tiers.length > 0 && (
                   <div className="tier-scope-picker">
                     <span>Tier scope</span>

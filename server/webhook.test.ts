@@ -1,6 +1,7 @@
 import { createHmac } from "node:crypto";
 import { describe, expect, it } from "vitest";
 import {
+  documentationChanged,
   metadataChanged,
   pluginRefreshRequested,
   verifyWebhookSignature,
@@ -27,6 +28,14 @@ describe("GitHub webhooks", () => {
       metadataChanged(payload, [".portal/service.yaml", ".portal/team.yaml"]),
     ).toBe(true);
     expect(metadataChanged(payload, ["catalog.yaml"])).toBe(false);
+  });
+  it("detects repository Markdown changes for documentation refresh", () => {
+    expect(
+      documentationChanged({ commits: [{ modified: ["docs/runbook.md"] }] }),
+    ).toBe(true);
+    expect(
+      documentationChanged({ commits: [{ modified: ["src/index.ts"] }] }),
+    ).toBe(false);
   });
   it("routes repository activity to plugin refresh", () => {
     for (const event of [

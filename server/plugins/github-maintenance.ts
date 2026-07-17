@@ -43,6 +43,10 @@ export async function collectGitHubMaintenance(
           title: issue.title,
           ageDays: daysBetween(issue.created_at) || 0,
           updatedDays: daysBetween(issue.updated_at) || 0,
+          updatedAt: issue.updated_at,
+          labels: (issue.labels || []).map((label: any) =>
+            typeof label === "string" ? label : label.name,
+          ),
           url: issue.html_url,
         }))
     : [];

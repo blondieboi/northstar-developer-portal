@@ -43,6 +43,7 @@ export async function upsertService(service: Record<string, unknown>) {
     service.serviceType,
     service.language,
     service.repository,
+    service.metadataPath || ".portal/service.yaml",
     service.metadata,
     service.score,
     service.scorecards || {},
@@ -50,11 +51,11 @@ export async function upsertService(service: Record<string, unknown>) {
   ];
   const { rows } = await pool.query(
     `
-    insert into services (name, description, owner, system, lifecycle, tier, service_type, language, repository, metadata, score, scorecards, installation_id)
-    values ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,$12,$13)
+    insert into services (name, description, owner, system, lifecycle, tier, service_type, language, repository, metadata_path, metadata, score, scorecards, installation_id)
+    values ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,$12,$13,$14)
     on conflict (name) do update set description=excluded.description, owner=excluded.owner,
       system=excluded.system, lifecycle=excluded.lifecycle, tier=excluded.tier, service_type=excluded.service_type, language=excluded.language,
-      repository=excluded.repository, metadata=excluded.metadata, score=excluded.score, scorecards=excluded.scorecards,
+      repository=excluded.repository, metadata_path=excluded.metadata_path, metadata=excluded.metadata, score=excluded.score, scorecards=excluded.scorecards,
       installation_id=excluded.installation_id, updated_at=now()
     returning *`,
     values,
@@ -588,4 +589,444 @@ export async function recordAction(
       version || null,
     ],
   );
+}
+
+export async function findServiceByName(name: string) {
+  if (!pool) return null;
+  return pool
+    .query("select * from services where name=$1", [name])
+    .then((result) => result.rows[0] || null);
+}
+
+export type ServiceRelationInput = {
+  sourceKind?: string;
+  sourceKey: string;
+  relationType: string;
+  targetKind: string;
+  targetKey: string;
+  metadata?: Record<string, unknown>;
+};
+
+export async function replaceServiceRelations(
+  serviceId: string | number,
+  relations: ServiceRelationInput[],
+) {
+  if (!pool) return relations;
+  const client = await pool.connect();
+  try {
+    await client.query("begin");
+    await client.query("delete from service_relations where service_id=$1", [
+      serviceId,
+    ]);
+    for (const relation of relations)
+      await client.query(
+        `insert into service_relations(service_id,source_kind,source_key,relation_type,target_kind,target_key,metadata)
+         values($1,$2,$3,$4,$5,$6,$7)`,
+        [
+          serviceId,
+          relation.sourceKind || "service",
+          relation.sourceKey,
+          relation.relationType,
+          relation.targetKind,
+          relation.targetKey,
+          relation.metadata || {},
+        ],
+      );
+    await client.query("commit");
+  } catch (error) {
+    await client.query("rollback");
+    throw error;
+  } finally {
+    client.release();
+  }
+  return relations;
+}
+
+export async function graphRows() {
+  if (!pool) return { services: [], relations: [] };
+  const [services, relations] = await Promise.all([
+    listServices(),
+    pool
+      .query("select * from service_relations order by source_key,target_key")
+      .then((result) => result.rows),
+  ]);
+  return { services: services || [], relations };
+}
+
+export type ServiceDocumentInput = {
+  path: string;
+  title: string;
+  content: string;
+  sha?: string | null;
+  sourceUpdatedAt?: string | null;
+};
+
+export async function replaceServiceDocuments(
+  serviceId: string | number,
+  documents: ServiceDocumentInput[],
+) {
+  if (!pool) return documents;
+  const client = await pool.connect();
+  try {
+    await client.query("begin");
+    await client.query("delete from service_documents where service_id=$1", [
+      serviceId,
+    ]);
+    for (const document of documents)
+      await client.query(
+        `insert into service_documents(service_id,path,title,content,sha,source_updated_at)
+         values($1,$2,$3,$4,$5,$6)`,
+        [
+          serviceId,
+          document.path,
+          document.title,
+          document.content,
+          document.sha || null,
+          document.sourceUpdatedAt || null,
+        ],
+      );
+    await client.query("commit");
+  } catch (error) {
+    await client.query("rollback");
+    throw error;
+  } finally {
+    client.release();
+  }
+  return documents;
+}
+
+export async function listServiceDocuments(serviceName?: string) {
+  if (!pool) return [];
+  const params = serviceName ? [serviceName] : [];
+  const where = serviceName ? "where s.name=$1" : "";
+  return pool
+    .query(
+      `select d.id,d.path,d.title,d.content,d.sha,d.source_updated_at,d.fetched_at,
+       s.name service_name,s.repository,s.owner from service_documents d
+       join services s on s.id=d.service_id ${where}
+       order by s.name,case when lower(d.path)='readme.md' then 0 else 1 end,d.path`,
+      params,
+    )
+    .then((result) => result.rows);
+}
+
+export async function listServicesMissingDocuments() {
+  if (!pool) return [];
+  return pool
+    .query(
+      `select s.* from services s where s.installation_id is not null and not exists
+       (select 1 from service_documents d where d.service_id=s.id) order by s.id`,
+    )
+    .then((result) => result.rows);
+}
+
+export async function createMetadataCampaign(input: {
+  title: string;
+  description: string;
+  fieldPath: string;
+  desiredValue: unknown;
+  filters: Record<string, unknown>;
+  createdBy: string;
+  targets: Array<{
+    serviceId: string | number;
+    serviceName: string;
+    repository: string;
+    beforeValue: unknown;
+    afterValue: unknown;
+    patch: unknown;
+    confidence: string;
+  }>;
+}) {
+  if (!pool) return { id: "preview", ...input, status: "draft" };
+  const client = await pool.connect();
+  try {
+    await client.query("begin");
+    const campaign = (
+      await client.query(
+        `insert into metadata_campaigns(title,description,field_path,desired_value,filters,created_by)
+         values($1,$2,$3,$4,$5,$6) returning *`,
+        [
+          input.title,
+          input.description,
+          input.fieldPath,
+          input.desiredValue,
+          input.filters,
+          input.createdBy,
+        ],
+      )
+    ).rows[0];
+    for (const target of input.targets)
+      await client.query(
+        `insert into metadata_campaign_targets(campaign_id,service_id,service_name,repository,before_value,after_value,patch,confidence)
+         values($1,$2,$3,$4,$5,$6,$7,$8)`,
+        [
+          campaign.id,
+          target.serviceId,
+          target.serviceName,
+          target.repository,
+          target.beforeValue,
+          target.afterValue,
+          target.patch,
+          target.confidence,
+        ],
+      );
+    await client.query("commit");
+    return campaign;
+  } catch (error) {
+    await client.query("rollback");
+    throw error;
+  } finally {
+    client.release();
+  }
+}
+
+export async function listMetadataCampaigns(id?: string | number) {
+  if (!pool) return [];
+  const campaigns = await pool.query(
+    `select c.*,
+     count(t.id)::int target_count,
+     count(t.id) filter(where t.status='completed')::int completed_count,
+     count(t.id) filter(where t.status='failed')::int failed_count,
+     count(t.id) filter(where t.status='excluded')::int excluded_count,
+     count(t.id) filter(where t.status in ('pr-open','launched'))::int active_count
+     from metadata_campaigns c left join metadata_campaign_targets t on t.campaign_id=c.id
+     ${id ? "where c.id=$1" : ""} group by c.id order by c.created_at desc`,
+    id ? [id] : [],
+  );
+  if (!id) return campaigns.rows;
+  if (!campaigns.rows[0]) return [];
+  const targets = await pool.query(
+    "select * from metadata_campaign_targets where campaign_id=$1 order by service_name",
+    [id],
+  );
+  return [{ ...campaigns.rows[0], targets: targets.rows }];
+}
+
+export async function campaignTargets(
+  campaignId: string | number,
+  statuses: string[] = ["pending", "failed"],
+) {
+  if (!pool) return [];
+  return pool
+    .query(
+      `select t.*,s.metadata,s.metadata_path,s.installation_id from metadata_campaign_targets t
+       left join services s on s.id=t.service_id
+       where t.campaign_id=$1 and t.status=any($2::text[]) order by t.id`,
+      [campaignId, statuses],
+    )
+    .then((result) => result.rows);
+}
+
+export async function updateCampaignTarget(
+  id: string | number,
+  update: {
+    status: string;
+    prNumber?: number | null;
+    prUrl?: string | null;
+    branch?: string | null;
+    error?: string | null;
+    exclusionReason?: string | null;
+  },
+) {
+  if (!pool) return { id, ...update };
+  return (
+    await pool.query(
+      `update metadata_campaign_targets set status=$2,pr_number=coalesce($3,pr_number),
+       pr_url=coalesce($4,pr_url),branch=coalesce($5,branch),error=$6,
+       exclusion_reason=coalesce($7,exclusion_reason),updated_at=now() where id=$1 returning *`,
+      [
+        id,
+        update.status,
+        update.prNumber ?? null,
+        update.prUrl ?? null,
+        update.branch ?? null,
+        update.error ?? null,
+        update.exclusionReason ?? null,
+      ],
+    )
+  ).rows[0];
+}
+
+export async function updateCampaignStatus(
+  id: string | number,
+  status: string,
+) {
+  if (!pool) return { id, status };
+  const completed = status === "completed" ? "now()" : "completed_at";
+  const launched = status === "active" ? "now()" : "launched_at";
+  return (
+    await pool.query(
+      `update metadata_campaigns set status=$2,launched_at=${launched},completed_at=${completed} where id=$1 returning *`,
+      [id, status],
+    )
+  ).rows[0];
+}
+
+export async function updateCampaignFromPullRequest(input: {
+  repository: string;
+  prNumber: number;
+  merged: boolean;
+  closed: boolean;
+}) {
+  if (!pool) return null;
+  const status = input.merged
+    ? "completed"
+    : input.closed
+      ? "failed"
+      : "pr-open";
+  const { rows } = await pool.query(
+    `update metadata_campaign_targets set status=$3,error=case when $3='failed' then 'Pull request closed without merge' else null end,updated_at=now()
+     where repository=$1 and pr_number=$2 returning campaign_id`,
+    [input.repository, input.prNumber, status],
+  );
+  return rows[0]?.campaign_id || null;
+}
+
+export async function createWaiver(input: {
+  serviceId: string | number;
+  scorecardId: string;
+  ruleId: string;
+  reason: string;
+  requestedBy: string;
+  expiresAt: string;
+}) {
+  if (!pool) return { id: "preview", ...input, status: "requested" };
+  return (
+    await pool.query(
+      `insert into scorecard_waivers(service_id,scorecard_id,rule_id,reason,requested_by,expires_at)
+       values($1,$2,$3,$4,$5,$6) returning *`,
+      [
+        input.serviceId,
+        input.scorecardId,
+        input.ruleId,
+        input.reason,
+        input.requestedBy,
+        input.expiresAt,
+      ],
+    )
+  ).rows[0];
+}
+
+export async function listWaivers(serviceName?: string) {
+  if (!pool) return [];
+  return pool
+    .query(
+      `select w.*,s.name service_name,s.repository,s.owner from scorecard_waivers w
+       join services s on s.id=w.service_id ${serviceName ? "where s.name=$1" : ""}
+       order by w.created_at desc`,
+      serviceName ? [serviceName] : [],
+    )
+    .then((result) => result.rows);
+}
+
+export async function decideWaiver(
+  id: string | number,
+  status: "approved" | "rejected",
+  actor: string,
+) {
+  if (!pool) return { id, status, decided_by: actor };
+  return (
+    await pool.query(
+      `update scorecard_waivers set status=$2,decided_by=$3,decided_at=now() where id=$1 returning *`,
+      [id, status, actor],
+    )
+  ).rows[0];
+}
+
+export async function recordPortalEvent(input: {
+  eventType: string;
+  actorLogin?: string | null;
+  path?: string | null;
+  entityKind?: string | null;
+  entityKey?: string | null;
+  properties?: Record<string, unknown>;
+}) {
+  if (!pool) return;
+  await pool.query(
+    `insert into portal_events(event_type,actor_login,path,entity_kind,entity_key,properties)
+     values($1,$2,$3,$4,$5,$6)`,
+    [
+      input.eventType,
+      input.actorLogin || null,
+      input.path || null,
+      input.entityKind || null,
+      input.entityKey || null,
+      input.properties || {},
+    ],
+  );
+}
+
+export async function portalAnalytics(days = 30) {
+  if (!pool)
+    return {
+      days,
+      totals: { events: 0, activeUsers: 0, pageViews: 0, actions: 0 },
+      eventTypes: [],
+      popularPaths: [],
+      searchesWithoutResults: [],
+      daily: [],
+      campaignOutcomes: [],
+    };
+  const interval = `${Math.max(1, Math.min(days, 365))} days`;
+  const [totals, eventTypes, popularPaths, searches, daily, outcomes] =
+    await Promise.all([
+      pool
+        .query(
+          `select count(*)::int events,count(distinct actor_login)::int active_users,
+           count(*) filter(where event_type='page.view')::int page_views,
+           count(*) filter(where event_type in ('action.dispatch','remediation.opened'))::int actions
+           from portal_events where created_at >= now()-$1::interval`,
+          [interval],
+        )
+        .then((result) => result.rows[0]),
+      pool
+        .query(
+          `select event_type,count(*)::int count from portal_events where created_at >= now()-$1::interval
+           group by event_type order by count desc`,
+          [interval],
+        )
+        .then((result) => result.rows),
+      pool
+        .query(
+          `select path,count(*)::int views from portal_events where event_type='page.view' and created_at >= now()-$1::interval
+           group by path order by views desc limit 10`,
+          [interval],
+        )
+        .then((result) => result.rows),
+      pool
+        .query(
+          `select properties->>'query' query,count(*)::int count from portal_events
+           where event_type='search.empty' and created_at >= now()-$1::interval
+           group by properties->>'query' order by count desc limit 10`,
+          [interval],
+        )
+        .then((result) => result.rows),
+      pool
+        .query(
+          `select date_trunc('day',created_at)::date as event_day,count(*)::int events,
+           count(distinct actor_login)::int users from portal_events where created_at >= now()-$1::interval
+           group by 1 order by 1`,
+          [interval],
+        )
+        .then((result) => result.rows),
+      pool
+        .query(
+          `select status,count(*)::int count from metadata_campaign_targets group by status order by count desc`,
+        )
+        .then((result) => result.rows),
+    ]);
+  return {
+    days,
+    totals: {
+      events: totals.events,
+      activeUsers: totals.active_users,
+      pageViews: totals.page_views,
+      actions: totals.actions,
+    },
+    eventTypes,
+    popularPaths,
+    searchesWithoutResults: searches,
+    daily,
+    campaignOutcomes: outcomes,
+  };
 }

@@ -15,6 +15,8 @@ scorecards:
           weight: 1
           severity: required
           enabled: true
+          remediation:
+            guidance: Classify the service by operational criticality in spec.tier.
         - id: type
           title: Service type is declared
           description: Architectural role is explicit
@@ -23,6 +25,8 @@ scorecards:
           weight: 1
           severity: required
           enabled: true
+          remediation:
+            guidance: Declare the architectural role in spec.type.
         - id: critical-docs
           title: Critical services have documentation
           description: Documentation is required for higher-impact services
@@ -34,6 +38,9 @@ scorecards:
           enabled: true
           tiers: [critical, high]
           types: [backend, fullstack]
+          remediation:
+            guidance: Add a documentation entry to spec.links for this high-impact service.
+            docsUrl: https://backstage.io/docs/features/techdocs/
     - id: delivery-health
       title: Delivery health
       description: Signals collected from delivery plugins

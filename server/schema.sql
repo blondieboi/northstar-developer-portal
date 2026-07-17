@@ -138,3 +138,92 @@ create table if not exists webhook_deliveries (
   message text,
   created_at timestamptz not null default now()
 );
+
+create table if not exists service_relations (
+  id bigserial primary key,
+  service_id bigint not null references services(id) on delete cascade,
+  source_kind text not null default 'service',
+  source_key text not null,
+  relation_type text not null,
+  target_kind text not null,
+  target_key text not null,
+  metadata jsonb not null default '{}'::jsonb,
+  updated_at timestamptz not null default now(),
+  unique(service_id, source_kind, source_key, relation_type, target_kind, target_key)
+);
+create index if not exists service_relations_target on service_relations(target_kind, target_key);
+
+create table if not exists service_documents (
+  id bigserial primary key,
+  service_id bigint not null references services(id) on delete cascade,
+  path text not null,
+  title text not null,
+  content text not null,
+  sha text,
+  source_updated_at timestamptz,
+  fetched_at timestamptz not null default now(),
+  unique(service_id, path)
+);
+create index if not exists service_documents_search on service_documents(service_id, source_updated_at desc);
+
+create table if not exists metadata_campaigns (
+  id bigserial primary key,
+  title text not null,
+  description text not null default '',
+  field_path text not null,
+  desired_value jsonb not null,
+  filters jsonb not null default '{}'::jsonb,
+  status text not null default 'draft',
+  created_by text not null,
+  created_at timestamptz not null default now(),
+  launched_at timestamptz,
+  completed_at timestamptz
+);
+
+create table if not exists metadata_campaign_targets (
+  id bigserial primary key,
+  campaign_id bigint not null references metadata_campaigns(id) on delete cascade,
+  service_id bigint references services(id) on delete set null,
+  service_name text not null,
+  repository text not null,
+  before_value jsonb,
+  after_value jsonb,
+  patch jsonb not null default '[]'::jsonb,
+  confidence text not null default 'explicit',
+  status text not null default 'pending',
+  pr_number integer,
+  pr_url text,
+  branch text,
+  error text,
+  exclusion_reason text,
+  updated_at timestamptz not null default now(),
+  unique(campaign_id, repository)
+);
+create index if not exists metadata_campaign_targets_status on metadata_campaign_targets(campaign_id, status);
+
+create table if not exists scorecard_waivers (
+  id bigserial primary key,
+  service_id bigint not null references services(id) on delete cascade,
+  scorecard_id text not null,
+  rule_id text not null,
+  reason text not null,
+  status text not null default 'requested',
+  requested_by text not null,
+  decided_by text,
+  expires_at timestamptz not null,
+  created_at timestamptz not null default now(),
+  decided_at timestamptz
+);
+create index if not exists scorecard_waivers_lookup on scorecard_waivers(service_id, scorecard_id, rule_id, status, expires_at);
+
+create table if not exists portal_events (
+  id bigserial primary key,
+  event_type text not null,
+  actor_login text,
+  path text,
+  entity_kind text,
+  entity_key text,
+  properties jsonb not null default '{}'::jsonb,
+  created_at timestamptz not null default now()
+);
+create index if not exists portal_events_type_time on portal_events(event_type, created_at desc);

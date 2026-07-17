@@ -23,47 +23,58 @@ scorecards:
           enabled: true
           tiers: [critical, high]
           types: [backend, fullstack]
+          remediation:
+            guidance: Expand metadata.description with the service purpose and boundary.
+            docsUrl: https://docs.example.com/standards/descriptions
+            suggestedValue: Describe the service purpose, users, and boundary.
 ```
 
 ## Scorecard fields
 
-| Field | Required | Validation |
-| --- | --- | --- |
-| `id` | Yes | Unique lowercase slug |
-| `title` | Yes | Non-empty display name |
-| `description` | No | Defaults to an empty string |
-| `enabled` | No | Defaults to `true` |
-| `primary` | No | Exactly one configured card must be primary |
-| `rules` | Yes | Array of weighted rules; may be empty |
+| Field         | Required | Validation                                  |
+| ------------- | -------- | ------------------------------------------- |
+| `id`          | Yes      | Unique lowercase slug                       |
+| `title`       | Yes      | Non-empty display name                      |
+| `description` | No       | Defaults to an empty string                 |
+| `enabled`     | No       | Defaults to `true`                          |
+| `primary`     | No       | Exactly one configured card must be primary |
+| `rules`       | Yes      | Array of weighted rules; may be empty       |
 
 Legacy documents containing `scorecards.rules` are read as one primary `metadata-quality` card. The next scorecard save writes the new `cards` shape.
 
 ## Rule fields
 
-| Field | Required | Validation |
-| --- | --- | --- |
-| `id` | Yes | Unique within its scorecard |
-| `title` | Yes | Non-empty user-facing check name |
-| `description` | No | Defaults to an empty string |
-| `source` | No | Omission or `kind: metadata` reads service metadata; `kind: plugin` also requires a built-in plugin ID |
-| `path` | Yes | Dotted path inside the selected source |
-| `operator` | Yes | One of the operators below |
-| `value` | Depends | Expected value for operators other than `present` |
-| `weight` | Yes | Positive number; defaults to `1` |
-| `severity` | Yes | `required` or `recommended` |
-| `enabled` | Yes | Defaults to `true` |
-| `tiers` | No | Non-empty list of configured tier IDs; omission means all services |
-| `types` | No | Non-empty list of configured service type IDs; omission means all services |
+| Field         | Required | Validation                                                                                             |
+| ------------- | -------- | ------------------------------------------------------------------------------------------------------ |
+| `id`          | Yes      | Unique within its scorecard                                                                            |
+| `title`       | Yes      | Non-empty user-facing check name                                                                       |
+| `description` | No       | Defaults to an empty string                                                                            |
+| `source`      | No       | Omission or `kind: metadata` reads service metadata; `kind: plugin` also requires a built-in plugin ID |
+| `path`        | Yes      | Dotted path inside the selected source                                                                 |
+| `operator`    | Yes      | One of the operators below                                                                             |
+| `value`       | Depends  | Expected value for operators other than `present`                                                      |
+| `weight`      | Yes      | Positive number; defaults to `1`                                                                       |
+| `severity`    | Yes      | `required` or `recommended`                                                                            |
+| `enabled`     | Yes      | Defaults to `true`                                                                                     |
+| `tiers`       | No       | Non-empty list of configured tier IDs; omission means all services                                     |
+| `types`       | No       | Non-empty list of configured service type IDs; omission means all services                             |
+| `remediation` | No       | Guidance, optional documentation URL, and optional metadata value for a GitHub fix PR                  |
+
+## Remediation and waivers
+
+Every failing rule can display remediation guidance. Metadata-backed rules with `remediation.suggestedValue` also offer **Open fix PR**, which creates a branch and pull request in the service repository that changes only the rule's dotted metadata path. Plugin-backed rules may provide guidance but cannot generate a metadata fix.
+
+Signed-in users can request a time-bounded waiver with a reason and expiry date. Administrators approve or reject requests under **Campaigns**. Approved waivers remain visible beside the failing check; they do not rewrite the underlying score, so the catalog continues to show the actual technical state separately from the accepted exception.
 
 ## Operators
 
-| Operator | Passes when |
-| --- | --- |
-| `present` | The value is not missing, `null`, or an empty string |
-| `equals` | The source value strictly equals `value` |
-| `oneOf` | `value` is an array containing the source value |
-| `minLength` | The source value is a string at least `value` characters long |
-| `contains` | The source value is an array and one serialized item contains the configured text, case-insensitively |
+| Operator    | Passes when                                                                                           |
+| ----------- | ----------------------------------------------------------------------------------------------------- |
+| `present`   | The value is not missing, `null`, or an empty string                                                  |
+| `equals`    | The source value strictly equals `value`                                                              |
+| `oneOf`     | `value` is an array containing the source value                                                       |
+| `minLength` | The source value is a string at least `value` characters long                                         |
+| `contains`  | The source value is an array and one serialized item contains the configured text, case-insensitively |
 
 ## Plugin-backed rules
 
