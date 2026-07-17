@@ -32,15 +32,15 @@ Catalog search matches service name, owner, and system. Filter by tier, service 
 
 ## Read a service dossier
 
-The dossier groups information by purpose:
+The dossier header provides the service identity, classification, freshness, and standards coverage at a glance. The sticky section register below it keeps the page focused on one kind of work at a time:
 
-- **Standards** shows every scorecard result and the primary card's applicable checks.
-- **Scorecard history** records changes so regressions and improvements are visible.
-- **Plugin sections** show normalized Actions, pull request, standards, deployment, security, and maintenance signals.
-- **Useful destinations** comes from `spec.links`.
-- **Signals** records the latest catalog and repository state available to Perongen.
-- **Stored metadata** shows the exact synchronized document.
-- **Ownership, source, and classification** identify the team, repository, lifecycle, operational tier, and architectural type responsible for the service.
+- **Health** is the default section. It shows scorecard checks, remediation choices, waivers, and score history.
+- **Operations** shows deployment state, incidents, security findings, on-call context, and the recent change timeline.
+- **Documentation** lists and renders Markdown synchronized from the service repository.
+- **Integrations** contains normalized Actions, pull request, repository, deployment, security, and maintenance signals from enabled providers.
+- **Details** contains ownership, source, classification, useful destinations, and the exact stored metadata document.
+
+The active section is included in the URL fragment, such as `/catalog/checkout-api#operations`, so a specific dossier view can be shared. Use the left and right arrow keys to move between sections when the register has keyboard focus. On small screens the register scrolls horizontally rather than stacking every section into one long page.
 
 ## Correct catalog data
 

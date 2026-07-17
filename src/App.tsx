@@ -1156,6 +1156,55 @@ function ServiceWorkspace({
   navigate: (view: View) => void;
   signedIn: boolean;
 }) {
+  type ServiceSection =
+    "health" | "operations" | "documentation" | "integrations" | "details";
+  const sectionIds: ServiceSection[] = [
+    "health",
+    "operations",
+    "documentation",
+    "integrations",
+    "details",
+  ];
+  const sectionFromHash = () => {
+    const candidate = window.location.hash.slice(1) as ServiceSection;
+    return sectionIds.includes(candidate) ? candidate : "health";
+  };
+  const [section, setSection] = useState<ServiceSection>(sectionFromHash);
+  useEffect(() => {
+    const syncSection = () => setSection(sectionFromHash());
+    window.addEventListener("hashchange", syncSection);
+    return () => window.removeEventListener("hashchange", syncSection);
+  }, []);
+  useEffect(() => setSection(sectionFromHash()), [service.name]);
+  useEffect(() => {
+    const activeTab = document.getElementById(`service-tab-${section}`);
+    const register = activeTab?.closest(".service-register");
+    if (activeTab && register)
+      register.scrollTo({ left: Math.max(0, activeTab.offsetLeft - 16) });
+  }, [section]);
+  const openSection = (next: ServiceSection) => {
+    setSection(next);
+    window.history.replaceState(
+      null,
+      "",
+      `${window.location.pathname}${window.location.search}#${next}`,
+    );
+  };
+  const moveSection = (
+    event: React.KeyboardEvent<HTMLButtonElement>,
+    current: ServiceSection,
+  ) => {
+    if (event.key !== "ArrowLeft" && event.key !== "ArrowRight") return;
+    event.preventDefault();
+    const direction = event.key === "ArrowRight" ? 1 : -1;
+    const currentIndex = sectionIds.indexOf(current);
+    const next =
+      sectionIds[
+        (currentIndex + direction + sectionIds.length) % sectionIds.length
+      ];
+    openSection(next);
+    document.getElementById(`service-tab-${next}`)?.focus();
+  };
   const links = Array.isArray(service.metadata?.spec?.links)
     ? service.metadata.spec.links
     : [];
@@ -1168,6 +1217,43 @@ function ServiceWorkspace({
   ).length;
   const tier = tiers.find((item) => item.id === service.tier);
   const serviceType = types.find((item) => item.id === service.service_type);
+  const sections: Array<{
+    id: ServiceSection;
+    label: string;
+    note: string;
+    Icon: typeof ShieldCheck;
+  }> = [
+    {
+      id: "health",
+      label: "Health",
+      note: `${passing}/${checks.length}`,
+      Icon: ShieldCheck,
+    },
+    {
+      id: "operations",
+      label: "Operations",
+      note: "Live",
+      Icon: Activity,
+    },
+    {
+      id: "documentation",
+      label: "Documentation",
+      note: "Repo",
+      Icon: BookOpen,
+    },
+    {
+      id: "integrations",
+      label: "Integrations",
+      note: `${plugins.length}`,
+      Icon: Box,
+    },
+    {
+      id: "details",
+      label: "Details",
+      note: "Source",
+      Icon: FileCode2,
+    },
+  ];
   return (
     <div className="page service-workspace">
       <button className="service-back" onClick={() => navigate("catalog")}>
@@ -1215,188 +1301,216 @@ function ServiceWorkspace({
           <span>Standards coverage</span>
         </div>
       </section>
-      <div className="service-dossier">
-        <div className="service-record">
-          <section className="record-section">
-            <div className="record-section-head">
-              <div>
-                <p className="eyebrow">STANDARDS</p>
-                <h2>{primary?.title || "Scorecards"}</h2>
-                <p>
-                  {passing} of {checks.length} applicable checks passing
-                </p>
-              </div>
-              <button
-                className="text-button"
-                onClick={() => navigate("scorecards")}
-              >
-                View all scorecards <ArrowRight size={14} />
-              </button>
-            </div>
-            <div className="service-scorecard-strip">
-              {cards
-                .filter((card) => card.enabled)
-                .map((card) => (
-                  <span className={card.primary ? "primary" : ""} key={card.id}>
-                    <strong>{service.scorecards?.[card.id] ?? 100}</strong>
-                    <small>{card.title}</small>
-                  </span>
-                ))}
-            </div>
-            {checks.length ? (
-              <StandardsChecks
-                service={service}
-                scorecardId={primary?.id || "metadata-quality"}
-                checks={checks}
-                signedIn={signedIn}
-              />
-            ) : (
-              <div className="record-empty">
-                <ShieldCheck size={17} />
-                <div>
-                  <strong>No checks apply to this service</strong>
-                  <p>
-                    Review the service tier, type, or scorecard scope
-                    configuration.
-                  </p>
-                </div>
-              </div>
-            )}
-          </section>
-          <ScoreHistory
-            serviceName={service.name}
-            currentScore={service.score}
-          />
-          <ServiceOperations serviceName={service.name} />
-          <ServiceDocumentation serviceName={service.name} />
-          <PluginServiceSections
-            plugins={service.plugins}
-            states={service.pluginStates}
-            enabled={plugins}
-          />
-          <section className="record-section">
-            <div className="record-section-head">
-              <div>
-                <p className="eyebrow">LINKS</p>
-                <h2>Useful destinations</h2>
-              </div>
-            </div>
-            {links.length ? (
-              <div className="service-links">
-                {links.map((link: any) => (
-                  <a
-                    href={link.url}
-                    target="_blank"
-                    rel="noopener"
-                    key={`${link.name}-${link.url}`}
-                  >
-                    <span>
-                      <Link2 size={15} />
-                      <strong>{link.name}</strong>
-                    </span>
-                    <ExternalLink size={14} />
-                  </a>
-                ))}
-              </div>
-            ) : (
-              <div className="record-empty">
-                <Link2 size={17} />
-                <div>
-                  <strong>No service links declared</strong>
-                  <p>
-                    Add documentation or operational links to{" "}
-                    <code>spec.links</code> in the service metadata.
-                  </p>
-                </div>
-              </div>
-            )}
-          </section>
-          <details className="metadata-disclosure">
-            <summary>
-              <span>
-                <FileCode2 size={16} />
-                Stored metadata
-              </span>
-              <ChevronDown size={15} />
-            </summary>
-            <pre>
-              <code>{JSON.stringify(service.metadata, null, 2)}</code>
-            </pre>
-          </details>
-        </div>
-        <aside className="service-facts">
-          <div>
-            <p className="eyebrow">OWNERSHIP</p>
-            <dl>
-              <dt>Team</dt>
-              <dd>
-                <span className="fact-avatar">{initials(service.owner)}</span>
-                {service.owner}
-              </dd>
-              <dt>System</dt>
-              <dd>{service.system}</dd>
-            </dl>
-          </div>
-          <div>
-            <p className="eyebrow">SOURCE</p>
-            <a
-              className="service-source"
-              href={`https://github.com/${service.repository}`}
-              target="_blank"
-              rel="noopener"
+      <nav className="service-register" aria-label="Service dossier sections">
+        <div role="tablist" aria-label="Service dossier">
+          {sections.map(({ id, label, note, Icon }) => (
+            <button
+              role="tab"
+              aria-selected={section === id}
+              aria-controls={`service-panel-${id}`}
+              id={`service-tab-${id}`}
+              className={section === id ? "active" : ""}
+              onClick={() => openSection(id)}
+              onKeyDown={(event) => moveSection(event, id)}
+              tabIndex={section === id ? 0 : -1}
+              key={id}
             >
-              <GitBranch size={16} />
+              <Icon size={15} />
               <span>
-                <strong>{service.repository}</strong>
-                <small>.portal/service.yaml</small>
+                <strong>{label}</strong>
+                <small>{note}</small>
               </span>
-              <ExternalLink size={13} />
-            </a>
-          </div>
-          <div>
-            <p className="eyebrow">CLASSIFICATION</p>
-            <dl>
-              <dt>Tier</dt>
-              <dd>
-                <span
-                  className={
-                    service.tier ? "tier-chip" : "tier-chip unclassified"
-                  }
+            </button>
+          ))}
+        </div>
+      </nav>
+      <div
+        className="service-register-panel"
+        role="tabpanel"
+        id={`service-panel-${section}`}
+        aria-labelledby={`service-tab-${section}`}
+      >
+        {section === "health" && (
+          <div className="service-record service-section-health">
+            <section className="record-section">
+              <div className="record-section-head">
+                <div>
+                  <p className="eyebrow">STANDARDS</p>
+                  <h2>{primary?.title || "Scorecards"}</h2>
+                  <p>
+                    {passing} of {checks.length} applicable checks passing
+                  </p>
+                </div>
+                <button
+                  className="text-button"
+                  onClick={() => navigate("scorecards")}
                 >
-                  {tier?.title || "Unclassified"}
-                </span>
-              </dd>
-              {tier?.description && (
-                <>
-                  <dt>Tier policy</dt>
-                  <dd>{tier.description}</dd>
-                </>
+                  View all scorecards <ArrowRight size={14} />
+                </button>
+              </div>
+              <div className="service-scorecard-strip">
+                {cards
+                  .filter((card) => card.enabled)
+                  .map((card) => (
+                    <span
+                      className={card.primary ? "primary" : ""}
+                      key={card.id}
+                    >
+                      <strong>{service.scorecards?.[card.id] ?? 100}</strong>
+                      <small>{card.title}</small>
+                    </span>
+                  ))}
+              </div>
+              {checks.length ? (
+                <StandardsChecks
+                  service={service}
+                  scorecardId={primary?.id || "metadata-quality"}
+                  checks={checks}
+                  signedIn={signedIn}
+                />
+              ) : (
+                <div className="record-empty">
+                  <ShieldCheck size={17} />
+                  <div>
+                    <strong>No checks apply to this service</strong>
+                    <p>
+                      Review the service tier, type, or scorecard scope
+                      configuration.
+                    </p>
+                  </div>
+                </div>
               )}
-              <dt>Type</dt>
-              <dd>
-                <span
-                  className={
-                    service.service_type
-                      ? "type-chip"
-                      : "type-chip unclassified"
-                  }
-                >
-                  {serviceType?.title || "Unclassified"}
-                </span>
-              </dd>
-              {serviceType?.description && (
-                <>
-                  <dt>Type definition</dt>
-                  <dd>{serviceType.description}</dd>
-                </>
-              )}
-              <dt>Lifecycle</dt>
-              <dd>{service.lifecycle}</dd>
-              <dt>Language</dt>
-              <dd>{service.language}</dd>
-            </dl>
+            </section>
+            <ScoreHistory
+              serviceName={service.name}
+              currentScore={service.score}
+            />
           </div>
-        </aside>
+        )}
+        {section === "operations" && (
+          <ServiceOperations serviceName={service.name} />
+        )}
+        {section === "documentation" && (
+          <ServiceDocumentation serviceName={service.name} />
+        )}
+        {section === "integrations" && (
+          <div className="service-record service-section-integrations">
+            <PluginServiceSections
+              plugins={service.plugins}
+              states={service.pluginStates}
+              enabled={plugins}
+            />
+            {!plugins.length && (
+              <section className="record-section">
+                <div className="record-empty">
+                  <Box size={18} />
+                  <div>
+                    <strong>No integrations are enabled</strong>
+                    <p>Enable a provider to add service-specific signals.</p>
+                  </div>
+                </div>
+              </section>
+            )}
+          </div>
+        )}
+        {section === "details" && (
+          <div className="service-record service-section-details">
+            <div className="service-detail-grid">
+              <section>
+                <p className="eyebrow">OWNERSHIP</p>
+                <dl>
+                  <dt>Team</dt>
+                  <dd>
+                    <span className="fact-avatar">
+                      {initials(service.owner)}
+                    </span>
+                    {service.owner}
+                  </dd>
+                  <dt>System</dt>
+                  <dd>{service.system}</dd>
+                </dl>
+              </section>
+              <section>
+                <p className="eyebrow">CLASSIFICATION</p>
+                <dl>
+                  <dt>Tier</dt>
+                  <dd>{tier?.title || "Unclassified"}</dd>
+                  <dt>Type</dt>
+                  <dd>{serviceType?.title || "Unclassified"}</dd>
+                  <dt>Lifecycle</dt>
+                  <dd>{service.lifecycle}</dd>
+                  <dt>Language</dt>
+                  <dd>{service.language}</dd>
+                </dl>
+              </section>
+              <section>
+                <p className="eyebrow">SOURCE</p>
+                <a
+                  className="service-source"
+                  href={`https://github.com/${service.repository}`}
+                  target="_blank"
+                  rel="noopener"
+                >
+                  <GitBranch size={16} />
+                  <span>
+                    <strong>{service.repository}</strong>
+                    <small>.portal/service.yaml</small>
+                  </span>
+                  <ExternalLink size={13} />
+                </a>
+              </section>
+            </div>
+            <section className="record-section">
+              <div className="record-section-head">
+                <div>
+                  <p className="eyebrow">LINKS</p>
+                  <h2>Useful destinations</h2>
+                </div>
+              </div>
+              {links.length ? (
+                <div className="service-links">
+                  {links.map((link: any) => (
+                    <a
+                      href={link.url}
+                      target="_blank"
+                      rel="noopener"
+                      key={`${link.name}-${link.url}`}
+                    >
+                      <span>
+                        <Link2 size={15} />
+                        <strong>{link.name}</strong>
+                      </span>
+                      <ExternalLink size={14} />
+                    </a>
+                  ))}
+                </div>
+              ) : (
+                <div className="record-empty">
+                  <Link2 size={17} />
+                  <div>
+                    <strong>No service links declared</strong>
+                    <p>
+                      Add documentation or operational links to{" "}
+                      <code>spec.links</code> in the service metadata.
+                    </p>
+                  </div>
+                </div>
+              )}
+            </section>
+            <details className="metadata-disclosure">
+              <summary>
+                <span>
+                  <FileCode2 size={16} />
+                  Stored metadata
+                </span>
+                <ChevronDown size={15} />
+              </summary>
+              <pre>
+                <code>{JSON.stringify(service.metadata, null, 2)}</code>
+              </pre>
+            </details>
+          </div>
+        )}
       </div>
     </div>
   );

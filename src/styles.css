@@ -7687,3 +7687,189 @@ select {
     position: static;
   }
 }
+
+/* Service dossier register */
+.service-register {
+  position: sticky;
+  top: 68px;
+  z-index: 12;
+  margin: 0 calc(clamp(24px, 4vw, 56px) * -1);
+  padding: 0 clamp(24px, 4vw, 56px);
+  border-bottom: 1px solid var(--line);
+  background: color-mix(in srgb, var(--canvas) 94%, transparent);
+  backdrop-filter: blur(14px);
+}
+.service-register [role="tablist"] {
+  display: grid;
+  grid-template-columns: repeat(5, minmax(112px, 1fr));
+  max-width: 1040px;
+}
+.service-register button {
+  position: relative;
+  min-width: 0;
+  min-height: 67px;
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  padding: 0 18px;
+  border: 0;
+  border-left: 1px solid var(--line);
+  background: transparent;
+  color: var(--muted);
+  text-align: left;
+}
+.service-register button:last-child {
+  border-right: 1px solid var(--line);
+}
+.service-register button::after {
+  content: "";
+  position: absolute;
+  right: 16px;
+  bottom: -1px;
+  left: 16px;
+  height: 3px;
+  background: var(--blue);
+  transform: scaleX(0);
+  transform-origin: left;
+  transition: transform 180ms ease;
+}
+.service-register button:hover {
+  background: color-mix(in srgb, var(--paper) 62%, transparent);
+  color: var(--ink);
+}
+.service-register button.active {
+  background: var(--paper);
+  color: var(--ink);
+}
+.service-register button.active::after {
+  transform: scaleX(1);
+}
+.service-register button:focus-visible {
+  z-index: 1;
+  outline: 2px solid var(--blue);
+  outline-offset: -3px;
+}
+.service-register button > svg {
+  flex: none;
+  color: currentColor;
+}
+.service-register button > span {
+  min-width: 0;
+  display: flex;
+  flex-direction: column;
+  gap: 3px;
+}
+.service-register button strong {
+  overflow: hidden;
+  font-size: 10px;
+  text-overflow: ellipsis;
+}
+.service-register button small {
+  font: 7px "DM Mono";
+  color: var(--muted);
+  text-transform: uppercase;
+  letter-spacing: 0.08em;
+}
+.service-register-panel {
+  width: min(100%, 1040px);
+  min-height: 440px;
+  animation: dossier-panel-in 180ms ease-out;
+}
+.service-register-panel > .record-section,
+.service-register-panel > .service-record > .record-section:first-child,
+.service-register-panel
+  > .service-record
+  > .plugin-surface:first-child
+  > .record-section:first-child {
+  padding-top: 48px;
+}
+.service-register-panel > .record-section:last-child,
+.service-register-panel > .service-record > .record-section:last-child,
+.service-register-panel
+  > .service-record
+  > .plugin-surface:last-child
+  > .record-section:last-child {
+  border-bottom: 0;
+}
+.service-detail-grid {
+  display: grid;
+  grid-template-columns: 0.8fr 1fr 1.2fr;
+  border-bottom: 1px solid var(--line);
+}
+.service-detail-grid > section {
+  min-width: 0;
+  padding: 48px 30px 38px;
+}
+.service-detail-grid > section:first-child {
+  padding-left: 0;
+}
+.service-detail-grid > section + section {
+  border-left: 1px solid var(--line);
+}
+.service-detail-grid dl {
+  margin: 0;
+}
+.service-detail-grid dt {
+  margin: 16px 0 6px;
+  color: var(--muted);
+  font: 7px "DM Mono";
+  letter-spacing: 0.07em;
+  text-transform: uppercase;
+}
+.service-detail-grid dd {
+  min-width: 0;
+  margin: 0;
+  display: flex;
+  align-items: center;
+  font-size: 11px;
+  font-weight: 600;
+}
+.service-detail-grid .service-source {
+  margin-top: 19px;
+}
+@keyframes dossier-panel-in {
+  from {
+    opacity: 0;
+    transform: translateY(5px);
+  }
+}
+@media (max-width: 760px) {
+  .service-register {
+    top: 59px;
+    margin: 0 -16px;
+    padding: 0;
+    overflow-x: auto;
+    scrollbar-width: none;
+  }
+  .service-register::-webkit-scrollbar {
+    display: none;
+  }
+  .service-register [role="tablist"] {
+    width: max-content;
+    min-width: 100%;
+    grid-template-columns: repeat(5, minmax(118px, 1fr));
+  }
+  .service-register button {
+    min-height: 62px;
+    padding: 0 14px;
+  }
+  .service-register-panel {
+    min-height: 360px;
+  }
+  .service-detail-grid {
+    grid-template-columns: 1fr;
+  }
+  .service-detail-grid > section,
+  .service-detail-grid > section:first-child {
+    padding: 30px 0;
+  }
+  .service-detail-grid > section + section {
+    border-top: 1px solid var(--line);
+    border-left: 0;
+  }
+}
+@media (prefers-reduced-motion: reduce) {
+  .service-register-panel {
+    animation: none;
+  }
+}
