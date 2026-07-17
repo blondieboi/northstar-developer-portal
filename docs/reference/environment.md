@@ -1,5 +1,7 @@
 # Environment variables
 
+Perongen development and build tooling requires Node.js 22.12 or newer.
+
 Environment variables contain deployment location, credentials, and bootstrap values. Secret values must come from the deployment platform's secret store.
 
 ## Runtime and URLs

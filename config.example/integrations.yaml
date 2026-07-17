@@ -6,3 +6,22 @@ integrations:
       config:
         lookbackDays: 30
         maximumRuns: 20
+    - id: github-pull-requests
+      enabled: true
+      config:
+        staleAfterDays: 14
+        maximumPullRequests: 30
+    - id: github-repository-standards
+      enabled: true
+      config: {}
+    - id: github-deployments
+      enabled: true
+      config:
+        maximumDeployments: 20
+    - id: github-security
+      enabled: true
+      config: {}
+    - id: github-maintenance
+      enabled: true
+      config:
+        staleAfterDays: 30

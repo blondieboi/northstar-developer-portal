@@ -2,6 +2,7 @@
   "name": "perongen-developer-portal",
   "private": true,
   "version": "0.1.0",
+  "engines": { "node": ">=22.12.0" },
   "type": "module",
   "scripts": {
     "dev": "vite --host 0.0.0.0",
@@ -21,15 +22,12 @@
     "@fastify/static": "latest",
     "@octokit/app": "latest",
     "@octokit/rest": "latest",
-    "@vitejs/plugin-react": "latest",
     "fastify": "latest",
     "lucide-react": "latest",
     "pg": "latest",
     "react": "latest",
     "react-dom": "latest",
     "tsx": "latest",
-    "typescript": "latest",
-    "vite": "latest",
     "yaml": "latest",
     "zod": "latest"
   },
@@ -38,8 +36,11 @@
     "@types/pg": "latest",
     "@types/react": "latest",
     "@types/react-dom": "latest",
+    "@vitejs/plugin-react": "^6.0.3",
     "pg-mem": "latest",
+    "typescript": "^7.0.2",
+    "vite": "^8.1.5",
     "vitepress": "1.6.4",
-    "vitest": "latest"
+    "vitest": "^4.1.10"
   }
 }

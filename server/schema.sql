@@ -25,6 +25,15 @@ update services set service_type=metadata -> 'spec' ->> 'type'
 where service_type is null and metadata -> 'spec' ->> 'type' is not null and metadata -> 'spec' ->> 'type' <> '';
 alter table services add column if not exists scorecards jsonb not null default '{}'::jsonb;
 
+create table if not exists service_score_history (
+  id bigserial primary key,
+  service_id bigint not null references services(id) on delete cascade,
+  score integer not null,
+  scorecards jsonb not null default '{}'::jsonb,
+  recorded_at timestamptz not null default now()
+);
+create index if not exists service_score_history_service_time on service_score_history(service_id, recorded_at desc);
+
 create table if not exists plugin_snapshots (
   plugin_id text not null,
   entity_kind text not null,
@@ -75,8 +84,10 @@ create table if not exists sync_runs (
   discovered integer not null default 0,
   registered integer not null default 0,
   error text,
+  results jsonb not null default '[]'::jsonb,
   created_at timestamptz not null default now()
 );
+alter table sync_runs add column if not exists results jsonb not null default '[]'::jsonb;
 
 create table if not exists action_runs (
   id bigserial primary key,

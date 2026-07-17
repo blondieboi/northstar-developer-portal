@@ -4,6 +4,8 @@ A simple, self-hosted developer portal with a software catalog, ownership metada
 
 ## Run locally
 
+Use Node.js 22.12 or newer.
+
 ```bash
 npm install
 npm run dev
@@ -100,6 +102,11 @@ spec:
 - Multiple named scorecards with metadata and plugin-backed checks
 - Admin-configurable, failure-isolated integration plugins
 - GitHub Actions workflow health in service dossiers
+- GitHub pull request queues, repository standards, deployments, releases, security posture, and maintenance health
+- Engineering inbox for delivery, security, catalog, standards, and ownership work
+- Global command palette across services, teams, people, actions, and tools
+- Shareable service and team URLs with browser navigation
+- Scorecard change history and catalog metadata remediation guidance
 - GitHub App installation-token authentication
 - Repository discovery and `.portal/service.yaml` ingestion
 - Team and people directories from `.portal/team.yaml` and GitHub profiles
@@ -112,5 +119,6 @@ spec:
 - Guided first-run readiness and catalog onboarding
 - Visual scorecard and workflow action builders
 - Signed GitHub webhook synchronization with delivery history
+- Accessible desktop and mobile layouts with light and dark themes
 
 GitHub OAuth sessions and administrator authorization are included. Production deployments should provide secrets through the infrastructure secret store rather than a local `.env` file.

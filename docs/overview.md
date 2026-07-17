@@ -2,6 +2,8 @@
 
 Perongen is a self-hosted developer portal for answering four everyday questions: what software do we own, who owns it, does it meet our standards, and which approved operations can people run themselves?
 
+It supports both discovery and daily engineering operations. The Engineering inbox brings delivery failures, security alerts, stale pull requests, standards gaps, catalog errors, and unclear ownership into one prioritized queue.
+
 It reads explicit metadata from installed GitHub repositories. It does not invent services or replace missing data with demo content. When information is absent, the portal shows what to add next.
 
 ## How the portal is organized
@@ -9,6 +11,7 @@ It reads explicit metadata from installed GitHub repositories. It does not inven
 | Area | What it provides | Source of truth |
 | --- | --- | --- |
 | Overview | Team context, recent services, standards coverage, and sync activity | Stored catalog and signed-in user |
+| Engineering inbox | Prioritized delivery, security, collaboration, catalog, and ownership work | Catalog, plugin snapshots, and sync diagnostics |
 | Catalog | Searchable services and detailed service dossiers, including enabled provider signals | `.portal/service.yaml` and plugin snapshots |
 | Teams and people | Ownership, membership, shared links, and primary-team context | `.portal/team.yaml` and GitHub profiles |
 | Scorecards | Multiple weighted standards views against metadata and plugin facts | Portal configuration and plugin snapshots |
