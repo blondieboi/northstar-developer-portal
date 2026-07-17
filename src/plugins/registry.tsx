@@ -490,12 +490,18 @@ export function PluginServiceSections({
         .map((plugin) => {
           const Component = serviceSurfaces[plugin.id];
           const state = states[plugin.id];
+          const stale = Boolean(
+            state?.expiresAt && new Date(state.expiresAt).getTime() < Date.now(),
+          );
+          const freshness = stale ? "stale" : state?.status || "waiting";
           return Component ? (
             <div className="plugin-surface" key={plugin.id}>
               <Component data={plugins?.[plugin.id]} />
-              <div className={`plugin-freshness ${state?.status || "waiting"}`}>
+              <div className={`plugin-freshness ${freshness}`}>
                 <span>
-                  {state?.status === "degraded"
+                  {stale
+                    ? `Evidence expired · last observed ${new Date(state.observedAt).toLocaleString()}`
+                    : state?.status === "degraded"
                     ? "Last refresh failed"
                     : state?.observedAt
                       ? `Observed ${new Date(state.observedAt).toLocaleString()}`

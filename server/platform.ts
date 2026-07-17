@@ -248,6 +248,47 @@ export function campaignPreview(
     .filter(Boolean) as Array<Record<string, any>>;
 }
 
+export function lifecycleProposal(
+  service: ServiceRow,
+  input: { action: "extend" | "promote" | "archive"; expiresAt?: string },
+  lifecycles: string[],
+) {
+  if (service.lifecycle !== "experimental")
+    throw new Error("Lifecycle actions are available only for experimental services");
+  if (input.action === "extend") {
+    if (!/^\d{4}-\d{2}-\d{2}$/.test(input.expiresAt || ""))
+      throw new Error("A new experiment expiry date is required");
+    const expiry = new Date(`${input.expiresAt}T23:59:59Z`);
+    if (
+      !Number.isFinite(expiry.getTime()) ||
+      expiry.toISOString().slice(0, 10) !== input.expiresAt ||
+      expiry <= new Date()
+    )
+      throw new Error("Experiment expiry must be in the future");
+    return {
+      fieldPath: "spec.experiment.expiresAt",
+      value: input.expiresAt,
+      title: `chore: extend ${service.name} experiment`,
+      guidance: `Extend the experiment review window to ${input.expiresAt}.`,
+    };
+  }
+  const lifecycle = input.action === "promote" ? "production" : "deprecated";
+  if (!lifecycles.includes(lifecycle))
+    throw new Error(`Catalog lifecycle ${lifecycle} is not configured`);
+  return {
+    fieldPath: "spec.lifecycle",
+    value: lifecycle,
+    title:
+      input.action === "promote"
+        ? `chore: promote ${service.name} to production`
+        : `chore: archive ${service.name} experiment`,
+    guidance:
+      input.action === "promote"
+        ? "Promote the experiment to the production lifecycle."
+        : "Move the experiment to the deprecated lifecycle for retirement.",
+  };
+}
+
 export async function openMetadataPullRequest(input: {
   installationId: number;
   repository: string;

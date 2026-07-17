@@ -67,6 +67,12 @@ describe('portal configuration',()=>{
     expect(validateConfig(configured).scorecards.cards[0].rules[0].remediation?.suggestedValue).toBe('team:platform')
     expect(()=>validateConfig({...configured,scorecards:{cards:[{...defaults.scorecards.cards[0],rules:[{...defaults.scorecards.cards[0].rules[0],remediation:{guidance:'',docsUrl:'not-a-url'}}]}]}})).toThrow()
   })
+  it('validates risk-scoped cards and plugin evidence age',()=>{
+    const secondary={id:'critical-readiness',title:'Critical readiness',description:'',enabled:true,primary:false,risks:['high','critical'] as const,rules:[]}
+    expect(validateConfig({...defaults,scorecards:{cards:[defaults.scorecards.cards[0],secondary]}}).scorecards.cards[1].risks).toEqual(['high','critical'])
+    expect(()=>validateConfig({...defaults,scorecards:{cards:[{...defaults.scorecards.cards[0],risks:['critical']} ]}})).toThrow('every risk level')
+    expect(()=>validateConfig({...defaults,scorecards:{cards:[{...defaults.scorecards.cards[0],rules:[{...defaults.scorecards.cards[0].rules[0],maxEvidenceAgeHours:24}]}]}})).toThrow('only to plugin-backed')
+  })
   it('requires one primary card and unique scorecard ids',()=>{
     const second={...defaults.scorecards.cards[0],id:'delivery',title:'Delivery',primary:false,rules:[]}
     expect(validateConfig({...defaults,scorecards:{cards:[defaults.scorecards.cards[0],second]}}).scorecards.cards).toHaveLength(2)

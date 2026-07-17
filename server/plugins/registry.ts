@@ -76,6 +76,7 @@ export const repositoryStandardsScorecard = {
     weight: severity === "required" ? 2 : 1,
     severity: severity as "required" | "recommended",
     enabled: true,
+    maxEvidenceAgeHours: 24,
   })),
 } satisfies ScorecardDefinition;
 

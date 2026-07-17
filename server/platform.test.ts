@@ -2,6 +2,7 @@ import { describe, expect, it } from "vitest";
 import {
   buildGraph,
   campaignPreview,
+  lifecycleProposal,
   operationalSnapshot,
   relationsFromMetadata,
   setAtPath,
@@ -119,6 +120,25 @@ describe("platform catalog model", () => {
     expect(() => setAtPath(metadata, "__proto__.polluted", true)).toThrow(
       "invalid",
     );
+  });
+  it("builds reviewable experiment lifecycle proposals", () => {
+    const service = { name: "prototype", lifecycle: "experimental" };
+    expect(lifecycleProposal(service, { action: "promote" }, ["production", "experimental", "deprecated"])).toMatchObject({ fieldPath: "spec.lifecycle", value: "production" });
+    expect(lifecycleProposal(service, { action: "archive" }, ["production", "experimental", "deprecated"])).toMatchObject({ value: "deprecated" });
+    expect(() =>
+      lifecycleProposal(
+        service,
+        { action: "extend", expiresAt: "2000-01-01" },
+        ["experimental"],
+      ),
+    ).toThrow("future");
+    expect(() =>
+      lifecycleProposal(
+        service,
+        { action: "extend", expiresAt: "2030-02-30" },
+        ["experimental"],
+      ),
+    ).toThrow("future");
   });
 });
 

@@ -88,6 +88,7 @@ import {
   buildGraph,
   campaignPreview,
   mapWithConcurrency,
+  lifecycleProposal,
   openMetadataPullRequest,
   operationalSnapshot,
   valueAtPath,
@@ -182,6 +183,49 @@ server.get<{ Params: { serviceName: string } }>(
     const service = await findServiceByName(request.params.serviceName);
     if (!service) return reply.code(404).send({ error: "Service not found" });
     return { remediations: await listScorecardRemediations(service.name) };
+  },
+);
+server.post<{
+  Params: { serviceName: string };
+  Body: { action: "extend" | "promote" | "archive"; expiresAt?: string };
+}>(
+  "/api/services/:serviceName/lifecycle-actions",
+  { preHandler: requireUser },
+  async (request, reply) => {
+    if (!["extend", "promote", "archive"].includes(request.body?.action))
+      return reply.code(400).send({ error: "Lifecycle action is invalid" });
+    const service = await findServiceByName(request.params.serviceName);
+    if (!service) return reply.code(404).send({ error: "Service not found" });
+    if (!service.installation_id)
+      return reply.code(400).send({ error: "Service GitHub installation is unavailable" });
+    try {
+      const proposal = lifecycleProposal(
+        service,
+        request.body,
+        getConfig().catalog.lifecycles,
+      );
+      const user = await currentUser(request);
+      const pull = await openMetadataPullRequest({
+        installationId: Number(service.installation_id),
+        repository: service.repository,
+        metadataPath: service.metadata_path,
+        fieldPath: proposal.fieldPath,
+        value: proposal.value,
+        title: proposal.title,
+        body: `${proposal.guidance}\n\nOpened by @${user!.login} from Perongen lifecycle guardrails.`,
+        branchPrefix: `perongen/lifecycle-${request.body.action}`,
+      });
+      await recordPortalEvent({
+        eventType: `lifecycle.${request.body.action}`,
+        actorLogin: user!.login,
+        entityKind: "service",
+        entityKey: service.name,
+        properties: { pullRequest: pull.number, fieldPath: proposal.fieldPath, value: proposal.value },
+      });
+      return reply.code(pull.alreadySatisfied ? 200 : 201).send({ pullRequest: pull });
+    } catch (error) {
+      return reply.code(400).send({ error: (error as Error).message });
+    }
   },
 );
 server.post<{
@@ -374,6 +418,7 @@ server.get("/api/portal", async () => ({
   catalog: {
     tiers: getConfig().catalog.tiers,
     types: getConfig().catalog.types,
+    lifecycles: getConfig().catalog.lifecycles,
   },
   scorecards: getConfig().scorecards,
   integrations: { plugins: await pluginCatalogResponse() },

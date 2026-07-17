@@ -81,8 +81,8 @@ export async function recalculateServiceScorecards(
   service: Record<string, any>,
 ) {
   const bundle = await pluginBundleForService(service.name);
-  const scorecards = scoresWithConfig(service.metadata, bundle.facts);
-  const score = scoreWithConfig(service.metadata, bundle.facts);
+  const scorecards = scoresWithConfig(service.metadata, bundle.facts, bundle.states);
+  const score = scoreWithConfig(service.metadata, bundle.facts, bundle.states);
   await updateServiceScores(service.id, score, scorecards);
   return {
     score,

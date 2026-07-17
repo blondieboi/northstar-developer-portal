@@ -15,7 +15,7 @@ import {
   Webhook,
   X,
 } from "lucide-react";
-import { evaluateRule, ruleApplies } from "./scorecards";
+import { evaluateRule, ruleApplies, scorecardApplies } from "./scorecards";
 import { PageIntro } from "./ui/PageIntro";
 
 type Section =
@@ -838,6 +838,14 @@ function ScorecardBuilder({
         n === index ? { ...rule, [key]: next } : rule,
       ),
     );
+  const riskLevels = ["unclassified", "low", "moderate", "high", "critical"];
+  const toggleCardRisk = (risk: string) => {
+    const current = card.risks || [];
+    const next = current.includes(risk)
+      ? current.filter((item: string) => item !== risk)
+      : [...current, risk];
+    updateCard("risks", next.length ? next : undefined);
+  };
   const toggleScope = (
     index: number,
     rule: any,
@@ -961,6 +969,29 @@ function ScorecardBuilder({
             Delete scorecard
           </button>
         </div>
+        {!card.primary && (
+          <div className="risk-scope-picker">
+            <span>Risk scope</span>
+            <label className={!card.risks?.length ? "selected" : ""}>
+              <input
+                type="checkbox"
+                checked={!card.risks?.length}
+                onChange={() => updateCard("risks", undefined)}
+              />
+              All risk levels
+            </label>
+            {riskLevels.map((risk) => (
+              <label className={card.risks?.includes(risk) ? "selected" : ""} key={risk}>
+                <input
+                  type="checkbox"
+                  checked={Boolean(card.risks?.includes(risk))}
+                  onChange={() => toggleCardRisk(risk)}
+                />
+                {risk}
+              </label>
+            ))}
+          </div>
+        )}
       </section>
       <div className="builder-list">
         <div className="builder-intro">
@@ -997,11 +1028,13 @@ function ScorecardBuilder({
           </button>
         </div>
         {card.rules.map((rule: any, index: number) => {
-          const eligible = services.filter((service) =>
-            ruleApplies(service.metadata, rule, service.plugins),
+          const eligible = services.filter(
+            (service) =>
+              scorecardApplies(service.metadata, card) &&
+              ruleApplies(service.metadata, rule, service.plugins),
           );
           const passing = eligible.filter((service) =>
-            evaluateRule(service.metadata, rule, service.plugins),
+            evaluateRule(service.metadata, rule, service.plugins, service.pluginStates),
           ).length;
           return (
             <article className="builder-card" key={index}>
@@ -1142,6 +1175,27 @@ function ScorecardBuilder({
                     }
                   />
                 </Field>
+                {rule.source?.kind === "plugin" && (
+                  <Field
+                    label="Evidence freshness"
+                    hint="The check fails when its last successful observation is older than this."
+                  >
+                    <input
+                      type="number"
+                      min="1"
+                      max="8760"
+                      value={rule.maxEvidenceAgeHours ?? ""}
+                      placeholder="No age limit"
+                      onChange={(event) =>
+                        updateRule(
+                          index,
+                          "maxEvidenceAgeHours",
+                          event.target.value ? Number(event.target.value) : undefined,
+                        )
+                      }
+                    />
+                  </Field>
+                )}
                 <Field label="Severity">
                   <select
                     value={rule.severity}

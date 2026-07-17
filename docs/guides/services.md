@@ -32,7 +32,7 @@ Catalog search matches service name, owner, and system. Filter by tier, service 
 
 ## Read a service dossier
 
-The dossier header provides the service identity, classification, freshness, and standards coverage at a glance. The sticky section register below it keeps the page focused on one kind of work at a time:
+The dossier header provides the service identity, classification, freshness, and standards coverage at a glance. Its guardrail posture ledger derives application risk, shows the experiment review clock, and reports whether provider evidence is current. Experimental services offer **Extend**, **Promote**, and **Archive** actions; each previews one metadata change and opens a reviewable GitHub pull request. The sticky section register below it keeps the page focused on one kind of work at a time:
 
 - **Health** is the default section. It shows every scorecard score; selecting one reveals its checks, remediation choices, waivers, and score history.
 - **Operations** shows deployment state, incidents, security findings, on-call context, and the recent change timeline.

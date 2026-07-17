@@ -21,6 +21,14 @@ import { refreshServicePlugins } from "./plugins/runtime.js";
 import { relationsFromMetadata } from "./platform.js";
 import { syncServiceDocuments } from "./documents.js";
 
+const metadataDate = z
+  .string()
+  .regex(/^\d{4}-\d{2}-\d{2}$/, "Use YYYY-MM-DD")
+  .refine((value) => {
+    const parsed = new Date(`${value}T00:00:00Z`);
+    return Number.isFinite(parsed.getTime()) && parsed.toISOString().slice(0, 10) === value;
+  }, "Date is invalid");
+
 export const metadataSchema = z.object({
   apiVersion: z.string(),
   kind: z.literal("Service"),
@@ -38,6 +46,18 @@ export const metadataSchema = z.object({
     type: z.string().min(1).optional(),
     system: z.string().optional(),
     language: z.string().optional(),
+    risk: z
+      .object({
+        exposure: z.enum(["internal", "public"]),
+        dataSensitivity: z.enum(["none", "internal", "confidential", "restricted"]),
+        authentication: z.enum(["none", "optional", "required"]),
+      })
+      .strict()
+      .optional(),
+    experiment: z
+      .object({ expiresAt: metadataDate })
+      .strict()
+      .optional(),
     links: z
       .array(z.object({ name: z.string(), url: z.string().url() }))
       .optional(),
@@ -102,6 +122,10 @@ export function validateServiceMetadata(value: unknown) {
     !config.catalog.types.some((type) => type.id === parsed.spec.type)
   )
     throw new Error(`Unsupported service type: ${parsed.spec.type}`);
+  if (parsed.spec.lifecycle === "experimental" && !parsed.spec.experiment?.expiresAt)
+    throw new Error("Experimental services require spec.experiment.expiresAt");
+  if (parsed.spec.lifecycle !== "experimental" && parsed.spec.experiment)
+    throw new Error("spec.experiment is only valid for experimental services");
   return parsed;
 }
 

@@ -20,6 +20,10 @@ spec:
   type: backend
   system: commerce
   language: TypeScript
+  risk:
+    exposure: public
+    dataSensitivity: confidential
+    authentication: required
   links:
     - name: Documentation
       url: https://docs.example.com/checkout
@@ -62,6 +66,33 @@ spec:
 | `spec.resources`       | No       | Named infrastructure resources with a type, relation, and optional URL         |
 | `spec.docsPath`        | No       | Repository directory containing Markdown; defaults to `docs`                   |
 | `spec.operational`     | No       | On-call name and optional runbook, dashboard, SLO, and cost URLs               |
+| `spec.risk`            | No       | Exposure, data sensitivity, and authentication facts used to derive risk       |
+| `spec.experiment`      | Required for experimental | Review deadline; `expiresAt` uses `YYYY-MM-DD`                   |
+
+## Risk classification
+
+`spec.risk` records the three facts Perongen uses to derive application risk:
+
+| Field | Values |
+| --- | --- |
+| `exposure` | `internal`, `public` |
+| `dataSensitivity` | `none`, `internal`, `confidential`, `restricted` |
+| `authentication` | `none`, `optional`, `required` |
+
+Perongen combines these facts with `spec.lifecycle` into `low`, `moderate`, `high`, or `critical` risk. Missing inputs remain explicitly `unclassified`; Perongen does not guess. Non-primary scorecards can target selected risk levels, allowing stronger standards to apply to public or sensitive applications without duplicating catalog entities.
+
+## Time-bound experiments
+
+An experimental service must declare its review deadline:
+
+```yaml
+spec:
+  lifecycle: experimental
+  experiment:
+    expiresAt: 2026-09-30
+```
+
+Experiments approaching expiry or already expired appear in the engineering inbox and service guardrail ledger. Signed-in users can extend the date, promote the service to `production`, or archive it into `deprecated`; each action opens a reviewable metadata pull request rather than mutating the catalog database.
 
 ## Relationships and resources
 

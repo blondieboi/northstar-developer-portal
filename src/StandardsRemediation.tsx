@@ -7,7 +7,7 @@ import {
   ShieldQuestion,
   X,
 } from "lucide-react";
-import { evaluateRule, type ScorecardRule } from "./scorecards";
+import { evidenceFreshness, evaluateRule, type ScorecardRule } from "./scorecards";
 
 type Waiver = {
   id: string;
@@ -31,11 +31,13 @@ export function StandardsChecks({
   scorecardId,
   checks,
   signedIn,
+  pluginStates = {},
 }: {
   service: any;
   scorecardId: string;
   checks: ScorecardRule[];
   signedIn: boolean;
+  pluginStates?: Record<string, any>;
 }) {
   const [waivers, setWaivers] = useState<Waiver[]>([]);
   const [remediations, setRemediations] = useState<Remediation[]>([]);
@@ -132,7 +134,13 @@ export function StandardsChecks({
     <div className="service-checks standards-remediation">
       {message && <div className="standards-message">{message}</div>}
       {checks.map((check) => {
-        const pass = evaluateRule(service.metadata, check, service.plugins);
+        const pass = evaluateRule(
+          service.metadata,
+          check,
+          service.plugins,
+          pluginStates,
+        );
+        const freshness = evidenceFreshness(check, pluginStates);
         const waiver = waivers.find(
           (candidate) =>
             candidate.scorecard_id === scorecardId &&
@@ -154,6 +162,13 @@ export function StandardsChecks({
             <div className="check-copy">
               <strong>{check.title}</strong>
               <small>{check.description || check.path}</small>
+              {check.source?.kind === "plugin" && (
+                <p className={`evidence-freshness ${freshness.status}`}>
+                  Evidence {freshness.status}
+                  {freshness.ageHours !== null && ` · ${Math.round(freshness.ageHours)}h old`}
+                  {check.maxEvidenceAgeHours && ` · limit ${check.maxEvidenceAgeHours}h`}
+                </p>
+              )}
               {!pass && check.remediation && (
                 <p className="remediation-guidance">
                   <FileWarning size={13} /> {check.remediation.guidance}

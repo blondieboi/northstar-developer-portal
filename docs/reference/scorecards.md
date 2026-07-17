@@ -40,6 +40,7 @@ scorecards:
 | `description` | No       | Defaults to an empty string                 |
 | `enabled`     | No       | Defaults to `true`                          |
 | `primary`     | No       | Exactly one configured card must be primary |
+| `risks`       | No       | Risk levels this non-primary card applies to; omission applies globally |
 | `rules`       | Yes      | Array of weighted rules; may be empty       |
 
 Legacy documents containing `scorecards.rules` are read as one primary `metadata-quality` card. The next scorecard save writes the new `cards` shape.
@@ -63,6 +64,7 @@ Enabled plugins may contribute non-primary defaults to the Git-backed configurat
 | `tiers`       | No       | Non-empty list of configured tier IDs; omission means all services                                     |
 | `types`       | No       | Non-empty list of configured service type IDs; omission means all services                             |
 | `remediation` | No       | Guidance, optional documentation URL, and optional metadata value for a GitHub fix PR                  |
+| `maxEvidenceAgeHours` | No | Plugin-backed rules only; maximum age of a successful observation before the check fails           |
 
 ## Remediation and waivers
 
@@ -98,11 +100,17 @@ Select a built-in provider and use a path relative to that provider's facts:
   enabled: true
 ```
 
-When the plugin is disabled or no snapshot exists, the rule is not applicable and contributes neither earned nor possible weight. A degraded provider may retain its last successful snapshot so an external outage does not immediately erase context.
+When the plugin is disabled or no snapshot exists, the rule is not applicable and contributes neither earned nor possible weight. A degraded provider may retain its last successful snapshot so an external outage does not immediately erase context. Set `maxEvidenceAgeHours` when old evidence must stop satisfying the standard:
+
+```yaml
+maxEvidenceAgeHours: 24
+```
+
+Cache expiry means a refresh is due; it does not by itself fail a policy. The configured limit is measured from the last successful observation. Once exceeded—or when the observation time is unknown—the applicable rule fails until fresh evidence arrives.
 
 ## Scoped checks
 
-Rules can target tiers, types, or both. When both are present, a service must match one selected tier and one selected type. Omitting a dimension makes it global.
+Rules can target tiers, types, or both. When both are present, a service must match one selected tier and one selected type. Omitting a dimension makes it global. Non-primary scorecards can additionally define `risks` using `unclassified`, `low`, `moderate`, `high`, or `critical`. Primary scorecards always apply to every service so the catalog-wide score remains comparable.
 
 For each service and scorecard, weights normalize only across enabled, applicable rules:
 

@@ -11,6 +11,7 @@ import {
 } from "lucide-react";
 import { useMemo, useState } from "react";
 import { PageIntro } from "./ui/PageIntro";
+import { experimentStatus, riskProfile } from "./governance";
 
 type Attention = {
   id: string;
@@ -37,6 +38,13 @@ export function EngineeringInbox({
   const items = useMemo<Attention[]>(() => {
     const result: Attention[] = [];
     for (const service of services) {
+      const risk = riskProfile(service.metadata);
+      const experiment = experimentStatus(service.metadata);
+      const staleProviders = Object.entries(service.pluginStates || {}).filter(
+        ([, state]: any) =>
+          state.status === "degraded" ||
+          Boolean(state.expiresAt && new Date(state.expiresAt).getTime() < Date.now()),
+      );
       const plugins = service.plugins || {};
       const security = plugins["github-security"];
       const prs = plugins["github-pull-requests"];
@@ -44,6 +52,51 @@ export function EngineeringInbox({
       const standards = plugins["github-repository-standards"];
       const deployments = plugins["github-deployments"];
       const maintenance = plugins["github-maintenance"];
+      if (!risk.complete)
+        result.push({
+          id: `risk-missing-${service.name}`,
+          severity: "warning",
+          category: "Risk",
+          title: `${service.name} has no complete risk profile`,
+          body: `Add ${risk.missing.join(", ")} to spec.risk.`,
+          service,
+          icon: ShieldAlert,
+        });
+      else if (risk.level === "critical" || risk.level === "high")
+        result.push({
+          id: `risk-${service.name}`,
+          severity: risk.level === "critical" ? "urgent" : "warning",
+          category: "Risk",
+          title: `${service.name} is classified ${risk.level} risk`,
+          body: risk.reasons.join(" · "),
+          service,
+          icon: ShieldAlert,
+        });
+      if (experiment.status === "missing" || experiment.status === "expired" || experiment.status === "due")
+        result.push({
+          id: `experiment-${service.name}`,
+          severity: experiment.status === "expired" ? "urgent" : "warning",
+          category: "Lifecycle",
+          title:
+            experiment.status === "missing"
+              ? `${service.name} experiment has no expiry`
+              : experiment.status === "expired"
+                ? `${service.name} experiment expired ${Math.abs(experiment.daysRemaining!)} days ago`
+                : `${service.name} experiment expires in ${experiment.daysRemaining} days`,
+          body: "Extend the experiment, promote it to production, or archive it from the service dossier.",
+          service,
+          icon: AlertTriangle,
+        });
+      if (staleProviders.length)
+        result.push({
+          id: `evidence-${service.name}`,
+          severity: "warning",
+          category: "Evidence",
+          title: `${service.name} has ${staleProviders.length} stale provider signal${staleProviders.length === 1 ? "" : "s"}`,
+          body: "Refresh provider evidence before relying on affected scorecard checks.",
+          service,
+          icon: PackageCheck,
+        });
       if (security?.criticalAlerts)
         result.push({
           id: `security-${service.name}`,

@@ -123,7 +123,9 @@ export async function upsertPluginSnapshot(snapshot: {
   const { rows } = await pool.query(
     `insert into plugin_snapshots(plugin_id,entity_kind,entity_key,status,data,error,observed_at,expires_at)
     values($1,$2,$3,$4,$5,$6,now(),$7) on conflict(plugin_id,entity_kind,entity_key) do update set
-    status=excluded.status,data=coalesce(excluded.data,plugin_snapshots.data),error=excluded.error,observed_at=now(),expires_at=excluded.expires_at returning *`,
+    status=excluded.status,data=coalesce(excluded.data,plugin_snapshots.data),error=excluded.error,
+    observed_at=case when excluded.data is null then plugin_snapshots.observed_at else now() end,
+    expires_at=excluded.expires_at returning *`,
     [
       snapshot.pluginId,
       snapshot.entityKind,

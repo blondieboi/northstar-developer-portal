@@ -41,6 +41,7 @@ import { VisualSettings } from "./VisualSettings";
 import {
   applicableRules,
   evaluateRule,
+  scorecardApplies,
   type ScorecardDefinition,
   type ScorecardRule,
 } from "./scorecards";
@@ -52,6 +53,8 @@ import { ResourceGraph } from "./ResourceGraph";
 import { DocumentationHub, ServiceDocumentation } from "./DocumentationHub";
 import { ServiceOperations } from "./ServiceOperations";
 import { StandardsChecks } from "./StandardsRemediation";
+import { LifecycleGuardrails } from "./LifecycleGuardrails";
+import { riskProfile } from "./governance";
 import { AnalyticsPage, CampaignsPage } from "./AdminPlatform";
 import { trackPortalEvent } from "./telemetry";
 
@@ -184,7 +187,7 @@ type Portal = {
     supportUrl: string;
     documentationUrl: string;
   };
-  catalog: { tiers: Tier[]; types: ServiceType[] };
+  catalog: { tiers: Tier[]; types: ServiceType[]; lifecycles: string[] };
   scorecards: { cards: ScorecardDefinition[] };
   integrations: { plugins: PublicPlugin[] };
   actions: ActionDef[];
@@ -198,7 +201,7 @@ const emptyPortal: Portal = {
     supportUrl: "",
     documentationUrl: "",
   },
-  catalog: { tiers: [], types: [] },
+  catalog: { tiers: [], types: [], lifecycles: [] },
   scorecards: { cards: [] },
   integrations: { plugins: [] },
   actions: [],
@@ -683,6 +686,9 @@ function ServiceCard({
       <p>{service.description || "No description in service metadata."}</p>
       <div className="tags">
         <span>{service.lifecycle}</span>
+        <span className={`risk-chip ${riskProfile(service.metadata).level}`}>
+          {riskProfile(service.metadata).level} risk
+        </span>
         {service.tier && <span className="tier-chip">{service.tier}</span>}
         {service.service_type && (
           <span className="type-chip">{service.service_type}</span>
@@ -963,6 +969,7 @@ function Catalog({
   const [query, setQuery] = useState("");
   const [tier, setTier] = useState("");
   const [type, setType] = useState("");
+  const [risk, setRisk] = useState("");
   const filtered = useMemo(
     () =>
       services.filter(
@@ -974,9 +981,10 @@ function Catalog({
           (!type ||
             (type === "unclassified"
               ? !s.service_type
-              : s.service_type === type)),
+              : s.service_type === type)) &&
+          (!risk || riskProfile(s.metadata).level === risk),
       ),
-    [query, tier, type, services],
+    [query, tier, type, risk, services],
   );
   const invalid = (activity[0]?.results || []).filter(
     (item) => item.status === "invalid",
@@ -1062,6 +1070,17 @@ function Catalog({
             <option value="unclassified">Unclassified</option>
           </select>
         )}
+        <select
+          className="filter risk-filter"
+          aria-label="Filter by derived risk"
+          value={risk}
+          onChange={(event) => setRisk(event.target.value)}
+        >
+          <option value="">All risk levels</option>
+          {['critical', 'high', 'moderate', 'low', 'unclassified'].map((level) => (
+            <option value={level} key={level}>{level[0].toUpperCase() + level.slice(1)}</option>
+          ))}
+        </select>
         <div className="result-count">
           <i className="dot green" />
           Live · {filtered.length} services
@@ -1110,6 +1129,9 @@ function Catalog({
                 >
                   {types.find((item) => item.id === s.service_type)?.title ||
                     "No type"}
+                </span>
+                <span className={`risk-chip ${riskProfile(s.metadata).level}`}>
+                  {riskProfile(s.metadata).level} risk
                 </span>
               </span>
               <span>
@@ -1278,7 +1300,9 @@ function ServiceWorkspace({
   const links = Array.isArray(service.metadata?.spec?.links)
     ? service.metadata.spec.links
     : [];
-  const enabledCards = cards.filter((card) => card.enabled);
+  const enabledCards = cards.filter(
+    (card) => card.enabled && scorecardApplies(service.metadata, card),
+  );
   const primary = enabledCards.find((card) => card.primary) || enabledCards[0];
   const [selectedScorecard, setSelectedScorecard] = useState(primary?.id || "");
   useEffect(() => {
@@ -1291,7 +1315,7 @@ function ServiceWorkspace({
     ? applicableRules(service.metadata, activeScorecard.rules, service.plugins)
     : [];
   const passing = checks.filter((check) =>
-    evaluateRule(service.metadata, check, service.plugins),
+    evaluateRule(service.metadata, check, service.plugins, service.pluginStates),
   ).length;
   const tier = tiers.find((item) => item.id === service.tier);
   const serviceType = types.find((item) => item.id === service.service_type);
@@ -1379,6 +1403,7 @@ function ServiceWorkspace({
           <span>Standards coverage</span>
         </div>
       </section>
+      <LifecycleGuardrails service={service} signedIn={signedIn} />
       <nav className="service-register" aria-label="Service dossier sections">
         <div role="tablist" aria-label="Service dossier">
           {sections.map(({ id, label, note, Icon }) => (
@@ -1450,6 +1475,7 @@ function ServiceWorkspace({
                   scorecardId={activeScorecard?.id || "metadata-quality"}
                   checks={checks}
                   signedIn={signedIn}
+                  pluginStates={service.pluginStates}
                 />
               ) : (
                 <div className="record-empty">

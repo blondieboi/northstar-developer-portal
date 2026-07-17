@@ -70,6 +70,10 @@ spec:
   type: backend
   system: commerce
   language: TypeScript
+  risk:
+    exposure: public
+    dataSensitivity: confidential
+    authentication: required
   links:
     - name: Documentation
       url: https://docs.example.com/checkout

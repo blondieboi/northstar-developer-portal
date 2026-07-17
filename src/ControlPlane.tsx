@@ -10,7 +10,7 @@ import {
   X,
   Zap,
 } from "lucide-react";
-import { evaluateRule, ruleApplies } from "./scorecards";
+import { evaluateRule, ruleApplies, scorecardApplies } from "./scorecards";
 import { PageIntro } from "./ui/PageIntro";
 
 const rel = (value: string) => new Date(value).toLocaleString();
@@ -55,23 +55,26 @@ export function ConfiguredScorecards({
       </div>
     );
   const active = card.rules.filter((rule: any) => rule.enabled);
+  const scopedServices = services.filter((service) =>
+    scorecardApplies(service.metadata, card),
+  );
   const evaluations = active.reduce(
     (sum: number, rule: any) =>
       sum +
-      services.filter((service) =>
+      scopedServices.filter((service) =>
         ruleApplies(service.metadata, rule, service.plugins),
       ).length,
     0,
   );
-  const avg = services.length
+  const avg = scopedServices.length
     ? Math.round(
-        services.reduce(
+        scopedServices.reduce(
           (sum, service) =>
             sum +
             (service.scorecards?.[card.id] ??
               (card.primary ? service.score : 100)),
           0,
-        ) / services.length,
+        ) / scopedServices.length,
       )
     : 0;
   const tierTitle = (id: string) =>
@@ -100,6 +103,7 @@ export function ConfiguredScorecards({
               <strong>{item.title}</strong>
               <small>
                 {item.rules.filter((rule: any) => rule.enabled).length} checks
+                {item.risks?.length ? ` · ${item.risks.join(", ")} risk` : ""}
               </small>
             </button>
           ))}
@@ -120,7 +124,7 @@ export function ConfiguredScorecards({
               checks
             </span>
             <span>
-              <strong>{services.length}</strong>
+              <strong>{scopedServices.length}</strong>
               services
             </span>
             <span>
@@ -141,11 +145,16 @@ export function ConfiguredScorecards({
             <span>Metadata and plugin signals</span>
           </div>
           {active.map((rule: any) => {
-            const eligible = services.filter((service) =>
+            const eligible = scopedServices.filter((service) =>
               ruleApplies(service.metadata, rule, service.plugins),
             );
             const passing = eligible.filter((service) =>
-              evaluateRule(service.metadata, rule, service.plugins),
+              evaluateRule(
+                service.metadata,
+                rule,
+                service.plugins,
+                service.pluginStates,
+              ),
             ).length;
             return (
               <div className="rule" key={rule.id}>
@@ -172,7 +181,7 @@ export function ConfiguredScorecards({
                   </p>
                   <div className="rule-source">
                     {rule.source?.kind === "plugin"
-                      ? `Plugin · ${rule.source.plugin}`
+                      ? `Plugin · ${rule.source.plugin}${rule.maxEvidenceAgeHours ? ` · evidence ≤ ${rule.maxEvidenceAgeHours}h` : ""}`
                       : "Service metadata"}
                   </div>
                   <div className="scope-matrix">
@@ -217,7 +226,7 @@ export function ConfiguredScorecards({
         <aside className="standards-aside">
           <h3>Coverage</h3>
           <p>{card.title} by service.</p>
-          {services.map((service) => {
+          {scopedServices.map((service) => {
             const score =
               service.scorecards?.[card.id] ??
               (card.primary ? service.score : 100);

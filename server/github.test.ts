@@ -99,6 +99,34 @@ describe("service metadata", () => {
       validateServiceMetadata({ ...complete, spec }).spec.type,
     ).toBeUndefined();
   });
+  it("validates risk inputs and requires an expiry for experiments", () => {
+    const experimental = {
+      ...complete,
+      spec: {
+        ...complete.spec,
+        lifecycle: "experimental",
+        experiment: { expiresAt: "2026-09-01" },
+        risk: {
+          exposure: "internal",
+          dataSensitivity: "internal",
+          authentication: "required",
+        },
+      },
+    };
+    expect(metadataSchema.parse(experimental).spec.risk?.exposure).toBe("internal");
+    expect(() =>
+      metadataSchema.parse({
+        ...experimental,
+        spec: { ...experimental.spec, experiment: { expiresAt: "2026-02-30" } },
+      }),
+    ).toThrow("Date is invalid");
+    expect(() =>
+      validateServiceMetadata({
+        ...experimental,
+        spec: { ...experimental.spec, experiment: undefined },
+      }),
+    ).toThrow("require spec.experiment.expiresAt");
+  });
   it("scores a complete service at 100", () =>
     expect(scoreMetadata(complete)).toBe(100));
   it("scores each missing recommended field independently", () => {

@@ -53,6 +53,7 @@ scorecards:
           source:
             kind: plugin
             plugin: github-actions
+          maxEvidenceAgeHours: 24
           path: runs.0.conclusion
           operator: equals
           value: success
@@ -164,6 +165,7 @@ scorecards:
       description: Security signals collected through the GitHub App
       enabled: true
       primary: false
+      risks: [high, critical]
       rules:
         - id: no-critical-alerts
           title: No high-priority security alerts

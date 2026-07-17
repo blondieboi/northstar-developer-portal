@@ -1,3 +1,5 @@
+import { riskProfile, type RiskLevel } from "./governance.js";
+
 export type ScorecardRule = {
   id: string;
   title: string;
@@ -10,6 +12,7 @@ export type ScorecardRule = {
   enabled: boolean;
   tiers?: string[];
   types?: string[];
+  maxEvidenceAgeHours?: number;
   source?: { kind: "metadata" } | { kind: "plugin"; plugin: string };
   remediation?: {
     guidance: string;
@@ -24,10 +27,15 @@ export type ScorecardDefinition = {
   description: string;
   enabled: boolean;
   primary: boolean;
+  risks?: RiskLevel[];
   rules: ScorecardRule[];
 };
 
 export type PluginFacts = Record<string, unknown>;
+export type PluginStates = Record<
+  string,
+  { status?: string; observedAt?: string | null; expiresAt?: string | null }
+>;
 
 export function valueAt(value: unknown, path: string) {
   return path
@@ -77,11 +85,40 @@ export function ruleApplies(
   return tierMatches && typeMatches && sourceAvailable;
 }
 
+export function scorecardApplies(metadata: unknown, card: ScorecardDefinition) {
+  const risk = riskProfile(metadata).level;
+  return !card.risks?.length || card.risks.includes(risk);
+}
+
+export function evidenceFreshness(
+  rule: ScorecardRule,
+  states: PluginStates = {},
+  now = Date.now(),
+) {
+  if (rule.source?.kind !== "plugin") return { status: "metadata" as const, ageHours: null };
+  const state = states[rule.source.plugin];
+  if (!state?.observedAt) return { status: "unknown" as const, ageHours: null };
+  const ageHours = Math.max(0, (now - new Date(state.observedAt).getTime()) / 3_600_000);
+  const stale =
+    rule.maxEvidenceAgeHours !== undefined
+      ? ageHours > rule.maxEvidenceAgeHours
+      : Boolean(state.expiresAt && new Date(state.expiresAt).getTime() < now);
+  return {
+    status: stale ? ("stale" as const) : state.status === "degraded" ? ("degraded" as const) : ("fresh" as const),
+    ageHours,
+  };
+}
+
 export function evaluateRule(
   metadata: unknown,
   rule: ScorecardRule,
   plugins: PluginFacts = {},
+  states: PluginStates = {},
 ) {
+  if (rule.maxEvidenceAgeHours !== undefined) {
+    const freshness = evidenceFreshness(rule, states).status;
+    if (freshness === "stale" || freshness === "unknown") return false;
+  }
   const value = ruleValue(metadata, rule, plugins);
   switch (rule.operator) {
     case "present":
@@ -118,12 +155,13 @@ export function calculateScore(
   metadata: unknown,
   rules: ScorecardRule[],
   plugins: PluginFacts = {},
+  states: PluginStates = {},
 ) {
   const applicable = applicableRules(metadata, rules, plugins);
   const total = applicable.reduce((sum, rule) => sum + rule.weight, 0);
   if (!total) return 100;
   const earned = applicable
-    .filter((rule) => evaluateRule(metadata, rule, plugins))
+    .filter((rule) => evaluateRule(metadata, rule, plugins, states))
     .reduce((sum, rule) => sum + rule.weight, 0);
   return Math.round((earned / total) * 100);
 }
@@ -132,10 +170,11 @@ export function calculateScorecards(
   metadata: unknown,
   cards: ScorecardDefinition[],
   plugins: PluginFacts = {},
+  states: PluginStates = {},
 ) {
   return Object.fromEntries(
     cards
-      .filter((card) => card.enabled)
-      .map((card) => [card.id, calculateScore(metadata, card.rules, plugins)]),
+      .filter((card) => card.enabled && scorecardApplies(metadata, card))
+      .map((card) => [card.id, calculateScore(metadata, card.rules, plugins, states)]),
   );
 }
