@@ -3,6 +3,7 @@ import {
   Activity,
   Check,
   ExternalLink,
+  FileDiff,
   GitBranch,
   Link2,
   Plus,
@@ -15,6 +16,7 @@ import {
   X,
 } from "lucide-react";
 import { evaluateRule, ruleApplies } from "./scorecards";
+import { PageIntro } from "./ui/PageIntro";
 
 type Section =
   "general" | "catalog" | "scorecards" | "actions" | "tools" | "integrations";
@@ -50,6 +52,9 @@ export function VisualSettings({ onRefresh }: { onRefresh: () => void }) {
     dirtyRef = useRef(false);
   const [remoteConflict, setRemoteConflict] = useState(false),
     [saving, setSaving] = useState(false);
+  const [preview, setPreview] = useState<any>(null);
+  const [previewError, setPreviewError] = useState("");
+  const [previewing, setPreviewing] = useState(false);
   const [syncingCatalog, setSyncingCatalog] = useState(false);
   const markDirty = (value: any) => {
     setDraft(value);
@@ -62,6 +67,8 @@ export function VisualSettings({ onRefresh }: { onRefresh: () => void }) {
     setDirty(false);
     dirtyRef.current = false;
     setRemoteConflict(false);
+    setPreview(null);
+    setPreviewError("");
   };
   async function load(forceDraft = false) {
     const [c, u, a, w, s, summary, plugins] = await Promise.all([
@@ -97,6 +104,41 @@ export function VisualSettings({ onRefresh }: { onRefresh: () => void }) {
     if (config && sectionNames.includes(tab as Section))
       setCleanDraft(tab as Section, config);
   }, [tab]);
+  useEffect(() => {
+    if (!dirty || !draft || draftSection !== tab) {
+      setPreview(null);
+      setPreviewError("");
+      setPreviewing(false);
+      return;
+    }
+    const controller = new AbortController();
+    const timer = setTimeout(() => {
+      setPreviewing(true);
+      jsonFetch(`/api/admin/config/${tab}/preview`, {
+        method: "POST",
+        headers: { "content-type": "application/json" },
+        body: JSON.stringify({ value: draft }),
+        signal: controller.signal,
+      })
+        .then((result) => {
+          setPreview(result);
+          setPreviewError("");
+        })
+        .catch((error) => {
+          if (error.name !== "AbortError") {
+            setPreview(null);
+            setPreviewError(error.message);
+          }
+        })
+        .finally(() => {
+          if (!controller.signal.aborted) setPreviewing(false);
+        });
+    }, 350);
+    return () => {
+      clearTimeout(timer);
+      controller.abort();
+    };
+  }, [dirty, draft, draftSection, tab]);
   useEffect(() => {
     const check = () =>
       jsonFetch("/api/config/revision")
@@ -239,16 +281,11 @@ export function VisualSettings({ onRefresh }: { onRefresh: () => void }) {
     return <div className="page">Loading control plane…</div>;
   return (
     <div className="page settings-page">
-      <div className="page-intro">
-        <div>
-          <p className="eyebrow">ADMINISTRATION</p>
-          <h1>Control plane</h1>
-          <p>
-            Shape the portal through guided controls—no configuration syntax
-            required.
-          </p>
-        </div>
-      </div>
+      <PageIntro
+        eyebrow="ADMINISTRATION"
+        title="Control plane"
+        description="Shape the portal through guided controls—no configuration syntax required."
+      />
       <div className={`config-source-banner ${config.source.status}`}>
         <GitBranch size={17} />
         <div>
@@ -353,6 +390,39 @@ export function VisualSettings({ onRefresh }: { onRefresh: () => void }) {
                   <IntegrationPanel status={status} deliveries={webhooks} />
                 </>
               )}
+              {dirty && (
+                <div className={`change-preview ${previewError ? "invalid" : ""}`}>
+                  <FileDiff size={17} />
+                  <div>
+                    <strong>
+                      {previewing
+                        ? "Validating change…"
+                        : previewError
+                          ? "Change needs attention"
+                          : `${preview?.sections?.length || 0} Git file${preview?.sections?.length === 1 ? "" : "s"} will change`}
+                    </strong>
+                    {previewError ? (
+                      <p>{previewError}</p>
+                    ) : preview?.sections?.length ? (
+                      <ul>
+                        {preview.sections.map((change: any) => (
+                          <li key={change.section}>
+                            <span>{change.path}</span>
+                            {change.created && <em>new</em>}
+                            <b className="additions">+{change.additions}</b>
+                            <b className="deletions">−{change.deletions}</b>
+                          </li>
+                        ))}
+                      </ul>
+                    ) : !previewing ? (
+                      <p>The draft does not change the canonical YAML.</p>
+                    ) : null}
+                    {preview?.sections?.length > 1 && (
+                      <small>These files will be applied together in one commit.</small>
+                    )}
+                  </div>
+                </div>
+              )}
               <div className="sheet-actions">
                 <button
                   className="primary"
@@ -360,7 +430,10 @@ export function VisualSettings({ onRefresh }: { onRefresh: () => void }) {
                     !dirty ||
                     saving ||
                     config.source.status !== "ready" ||
-                    remoteConflict
+                    remoteConflict ||
+                    previewing ||
+                    Boolean(previewError) ||
+                    !preview?.sections?.length
                   }
                   onClick={save}
                 >

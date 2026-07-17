@@ -27,7 +27,7 @@ Perongen never substitutes demo entities for missing data. Without a database or
 
 Perongen reads its canonical non-secret configuration from seven validated YAML files in a GitHub repository. Configure the repository, branch, directory, and GitHub App installation with `NORTHSTAR_CONFIG_REPOSITORY`, `NORTHSTAR_CONFIG_BRANCH`, `NORTHSTAR_CONFIG_DIRECTORY`, and `NORTHSTAR_CONFIG_INSTALLATION_ID`. See `config.example/` for the file contract. Older repositories without `integrations.yaml` continue to load; the first integration save creates it.
 
-Administrators edit configuration through **Settings** without writing YAML. Each save commits directly to the configured branch with optimistic blob-SHA conflict protection. Valid external commits are applied through Push webhooks; a 60-second server poll recovers missed deliveries, and open browsers check the applied revision every 15 seconds. PostgreSQL stores the last-known-good revision so reads remain available during GitHub outages, while writes are disabled until synchronization recovers.
+Administrators edit configuration through **Settings** without writing YAML. Each draft is validated and previews the YAML files and line counts that will change. Saves use optimistic blob-SHA conflict protection, and related multi-file updates are committed atomically. Valid external commits are applied through Push webhooks; a 60-second server poll recovers missed deliveries, and open browsers check the applied revision every 15 seconds. PostgreSQL stores the last-known-good revision so reads remain available during GitHub outages, while writes are disabled until synchronization recovers.
 
 The control plane manages portal identity, catalog ingestion, named weighted scorecards, built-in integration plugins, published GitHub workflow actions, user roles, provider health, and audit history. Database credentials, OAuth secrets, GitHub private keys, session secrets, and webhook secrets remain deployment-only and are never returned by the API.
 
@@ -40,7 +40,7 @@ Scorecards, plugins, and workflow actions use visual builders. GitHub push and w
 3. Create a GitHub App and add its App ID and private key to `.env`.
 4. Grant repository **Contents: read and write**, **Pull requests: read and write**, and **Actions: write** permissions, then install the App on both the configuration and catalog repositories.
 5. Set the GitHub App's **User authorization callback URL** (or an OAuth App's **Authorization callback URL**) to `${PUBLIC_URL}/api/auth/callback` exactly. For the default local setup, this is `http://localhost:4000/api/auth/callback`.
-6. Set the webhook URL to `${PUBLIC_URL}/api/github/webhook`, provide the same secret in `GITHUB_WEBHOOK_SECRET`, and subscribe to **Push** and **Workflow run** events.
+6. Set the webhook URL to `${PUBLIC_URL}/api/github/webhook`, provide the same secret in `GITHUB_WEBHOOK_SECRET`, and subscribe to **Push**, **Pull request**, and **Workflow run** events. Pull-request events keep campaign and scorecard-remediation status current.
 7. Commit all seven files from `config.example/` to the configured directory. At least one administrator must be listed in `access.yaml` or `GITHUB_ADMIN_LOGINS`.
 8. Add a strong `SESSION_SECRET`; use `GITHUB_ADMIN_LOGINS` only for deployment break-glass administrators.
 9. Install the app and sign in. The first-run flight path verifies the Git revision and guides the first catalog synchronization.

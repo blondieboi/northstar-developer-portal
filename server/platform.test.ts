@@ -96,6 +96,20 @@ describe("platform catalog model", () => {
       confidence: "explicit",
     });
     expect(valueAtPath(metadata, "spec.tier")).toBeUndefined();
+    expect(
+      campaignPreview([service], {
+        fieldPath: "spec.tier",
+        desiredValue: "critical",
+        filters: { lifecycles: ["development"], services: ["checkout"] },
+      }),
+    ).toHaveLength(0);
+    expect(
+      campaignPreview([service], {
+        fieldPath: "spec.tier",
+        desiredValue: "critical",
+        filters: { lifecycles: ["production"], services: ["checkout"] },
+      }),
+    ).toHaveLength(1);
   });
 
   it("sets safe nested paths and rejects prototype paths", () => {

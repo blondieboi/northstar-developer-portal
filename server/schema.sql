@@ -201,6 +201,27 @@ create table if not exists metadata_campaign_targets (
 );
 create index if not exists metadata_campaign_targets_status on metadata_campaign_targets(campaign_id, status);
 
+create table if not exists scorecard_remediations (
+  id bigserial primary key,
+  service_id bigint references services(id) on delete set null,
+  service_name text not null,
+  repository text not null,
+  scorecard_id text not null,
+  rule_id text not null,
+  field_path text not null,
+  before_value jsonb,
+  after_value jsonb not null,
+  status text not null default 'pr-open',
+  pr_number integer,
+  pr_url text,
+  branch text,
+  requested_by text not null,
+  created_at timestamptz not null default now(),
+  updated_at timestamptz not null default now(),
+  unique(repository, pr_number)
+);
+create index if not exists scorecard_remediations_service on scorecard_remediations(service_name, created_at desc);
+
 create table if not exists scorecard_waivers (
   id bigserial primary key,
   service_id bigint not null references services(id) on delete cascade,

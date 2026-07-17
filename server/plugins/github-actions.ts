@@ -5,6 +5,8 @@ export type GitHubActionsData = {
   repository: string;
   totalRuns: number;
   successRate: number | null;
+  failureStreak: number;
+  medianDurationMinutes: number | null;
   lastSuccessfulRunAt: string | null;
   workflows: Array<{ id: number; name: string; path: string }>;
   runs: Array<{
@@ -19,6 +21,7 @@ export type GitHubActionsData = {
     createdAt: string;
     updatedAt: string;
     url: string;
+    durationMinutes: number | null;
   }>;
 };
 
@@ -55,6 +58,10 @@ export async function collectGitHubActions(
     createdAt: run.created_at,
     updatedAt: run.updated_at,
     url: run.html_url,
+    durationMinutes:
+      run.created_at && run.updated_at
+        ? Math.max(0, Math.round((new Date(run.updated_at).getTime() - new Date(run.created_at).getTime()) / 60000))
+        : null,
   }));
   const completed = runs.filter((run: any) => run.conclusion);
   const successful = completed.filter(
@@ -72,12 +79,25 @@ export async function collectGitHubActions(
       ]),
     ).values(),
   ] as GitHubActionsData["workflows"];
+  const durations = completed
+    .map((run: any) => run.durationMinutes)
+    .filter((duration: any) => typeof duration === "number")
+    .sort((a: number, b: number) => a - b);
+  const middle = Math.floor(durations.length / 2);
+  const medianDurationMinutes = durations.length
+    ? durations.length % 2
+      ? durations[middle]
+      : Math.round((durations[middle - 1] + durations[middle]) / 2)
+    : null;
+  const failureStreak = completed.findIndex((run: any) => run.conclusion === "success");
   return {
     repository: service.repository,
     totalRuns: Number((response.data as any).total_count || runs.length),
     successRate: completed.length
       ? Math.round((successful.length / completed.length) * 100)
       : null,
+    failureStreak: failureStreak === -1 ? completed.length : failureStreak,
+    medianDurationMinutes,
     lastSuccessfulRunAt: successful[0]?.updatedAt || null,
     workflows,
     runs,

@@ -11,6 +11,7 @@ import {
   Zap,
 } from "lucide-react";
 import { evaluateRule, ruleApplies } from "./scorecards";
+import { PageIntro } from "./ui/PageIntro";
 
 const rel = (value: string) => new Date(value).toLocaleString();
 const ring = (score: number) => (
@@ -79,16 +80,11 @@ export function ConfiguredScorecards({
     types.find((type) => type.id === id)?.title || id;
   return (
     <div className="page">
-      <div className="page-intro">
-        <div>
-          <p className="eyebrow">STANDARDS</p>
-          <h1>Scorecards</h1>
-          <p>
-            Independent standards views can combine catalog metadata and plugin
-            signals.
-          </p>
-        </div>
-      </div>
+      <PageIntro
+        eyebrow="STANDARDS"
+        title="Scorecards"
+        description="Independent standards views can combine catalog metadata and plugin signals."
+      />
       <div className="scorecard-tabs" role="tablist">
         {cards
           .filter((item) => item.enabled)
@@ -274,13 +270,11 @@ export function ConfiguredActions({
   }
   return (
     <div className="page">
-      <div className="page-intro">
-        <div>
-          <p className="eyebrow">SELF-SERVICE</p>
-          <h1>Actions</h1>
-          <p>Published workflows prepared by your portal administrators.</p>
-        </div>
-      </div>
+      <PageIntro
+        eyebrow="SELF-SERVICE"
+        title="Actions"
+        description="Published workflows prepared by your portal administrators."
+      />
       <div className="configured-actions">
         {actions.map((a) => (
           <article className="action-feature" key={a.id}>

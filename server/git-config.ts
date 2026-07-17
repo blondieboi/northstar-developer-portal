@@ -16,6 +16,11 @@ let octokitFactory:typeof installationOctokit=installationOctokit
 export class ConfigConflictError extends Error{}
 export class ConfigUnavailableError extends Error{}
 
+export type ConfigChangePreview={
+  valid:true
+  sections:Array<{section:ConfigSection;path:string;created:boolean;changed:boolean;additions:number;deletions:number}>
+}
+
 function settings(){
   const repository=process.env.NORTHSTAR_CONFIG_REPOSITORY?.trim()
   const branch=process.env.NORTHSTAR_CONFIG_BRANCH?.trim()
@@ -104,6 +109,62 @@ export const configReady=()=>hasApplied
 
 async function markWriteUnavailable(error:unknown,actor:string){const message=(error as Error).message;source={...source,status:'degraded',error:message,syncedAt:now()};await saveConfigState({observedSha:source.observedSha,appliedSha:source.appliedSha,status:'degraded',error:message,applied:false});await recordConfigSync({observedSha:source.observedSha,appliedSha:source.appliedSha,status:'failed',actor,error:message})}
 
+function lineChanges(before:string,after:string){
+  const left=before.split('\n');const right=after.split('\n');const counts=new Map<string,number>()
+  for(const line of left)counts.set(line,(counts.get(line)||0)+1)
+  let additions=0
+  for(const line of right){const count=counts.get(line)||0;if(count)counts.set(line,count-1);else additions+=1}
+  return{additions,deletions:[...counts.values()].reduce((total,count)=>total+count,0)}
+}
+
+function plannedSections(section:ConfigSection,value:unknown){
+  const checked=validateSection(section,value);const current=getConfig()
+  if(section!=='integrations')return new Map<ConfigSection,unknown>([[section,checked]])
+  const integrations=checked as PortalConfig['integrations']
+  const additions=missingPluginScorecards({integrations,scorecards:current.scorecards})
+  const planned=new Map<ConfigSection,unknown>()
+  if(additions.length)planned.set('scorecards',{cards:[...current.scorecards.cards,...additions]})
+  if(JSON.stringify(integrations)!==JSON.stringify(current.integrations))planned.set('integrations',integrations)
+  return planned
+}
+
+export function previewConfigChange(section:ConfigSection,value:unknown):ConfigChangePreview{
+  const planned=plannedSections(section,value);const candidate={...getConfig()}
+  for(const [key,next] of planned)(candidate as any)[key]=next
+  validateConfig(candidate);assertAdministratorConfigured(candidate)
+  const cfg=settings()
+  return{valid:true,sections:[...planned].map(([key,next])=>{
+    const before=serializeSection(key,getConfig()[key]);const after=serializeSection(key,next as any);const changes=lineChanges(before,after)
+    return{section:key,path:filePath(cfg.directory,key),created:!source.files[key],changed:before!==after,...changes}
+  }).filter(change=>change.changed)}
+}
+
+async function commitSectionsAtomically(values:Map<ConfigSection,unknown>,expected:Partial<Record<ConfigSection,string|undefined>>,actor:{login:string;id:number;name:string}){
+  if(source.status!=='ready')throw new ConfigUnavailableError('GitHub configuration is degraded; writes are disabled until synchronization recovers')
+  const cfg=settings();const octokit=await octokitFactory(cfg.installationId)
+  try{
+    const head=await headSha()
+    if(source.appliedSha!==head)throw new ConfigConflictError('Configuration changed in GitHub; reload before saving')
+    for(const section of values.keys()){
+      const current=source.files[section]?.sha
+      if(current!==expected[section])throw new ConfigConflictError(`${section}.yaml changed in GitHub; reload before saving`)
+    }
+    const parent=await octokit.request('GET /repos/{owner}/{repo}/git/commits/{commit_sha}',{owner:cfg.owner,repo:cfg.repo,commit_sha:head})
+    const entries=[] as Array<{path:string;mode:'100644';type:'blob';sha:string}>
+    for(const [section,value] of values){
+      const checked=validateSection(section,value);const blob=await octokit.request('POST /repos/{owner}/{repo}/git/blobs',{owner:cfg.owner,repo:cfg.repo,content:serializeSection(section,checked),encoding:'utf-8'})
+      entries.push({path:filePath(cfg.directory,section),mode:'100644',type:'blob',sha:blob.data.sha})
+    }
+    const tree=await octokit.request('POST /repos/{owner}/{repo}/git/trees',{owner:cfg.owner,repo:cfg.repo,base_tree:parent.data.tree.sha,tree:entries})
+    const commit=await octokit.request('POST /repos/{owner}/{repo}/git/commits',{owner:cfg.owner,repo:cfg.repo,message:`settings: update ${[...values.keys()].join(' and ')} via UI by @${actor.login}`,tree:tree.data.sha,parents:[head],author:{name:actor.name||actor.login,email:`${actor.id}+${actor.login}@users.noreply.github.com`},committer:{name:'Perongen GitHub App',email:'noreply@perongen.local'}} as any)
+    await octokit.request('PATCH /repos/{owner}/{repo}/git/refs/{ref}',{owner:cfg.owner,repo:cfg.repo,ref:`heads/${cfg.branch}`,sha:commit.data.sha,force:false})
+    return syncGitConfig(actor.login,commit.data.sha)
+  }catch(error){
+    if(error instanceof ConfigConflictError||(error as {status?:number}).status===409||(error as {status?:number}).status===422)throw new ConfigConflictError('Configuration changed in GitHub; reload before saving')
+    await markWriteUnavailable(error,actor.login);throw new ConfigUnavailableError(`GitHub configuration write failed: ${(error as Error).message}`)
+  }
+}
+
 export async function commitSection(section:ConfigSection,value:unknown,expectedBlobSha:string|undefined,actor:{login:string;id:number;name:string}){
   if(source.status!=='ready')throw new ConfigUnavailableError('GitHub configuration is degraded; writes are disabled until synchronization recovers')
   const checked=validateSection(section,value);const candidate=validateConfig({...getConfig(),[section]:checked});assertAdministratorConfigured(candidate)
@@ -125,11 +186,11 @@ export async function commitIntegrations(value:unknown,expectedBlobSha:string|un
   const integrations=validateSection('integrations',value) as PortalConfig['integrations']
   const current=getConfig();const integrationsChanged=JSON.stringify(integrations)!==JSON.stringify(current.integrations)
   const additions=missingPluginScorecards({integrations,scorecards:current.scorecards})
-  let result:SyncResult|undefined
-  if(additions.length){
-    result=await commitSection('scorecards',{cards:[...current.scorecards.cards,...additions]},source.files.scorecards?.sha,actor)
-  }
-  return integrationsChanged?commitSection('integrations',integrations,expectedBlobSha,actor):result||{changed:[],source:getConfigSource()}
+  if(additions.length&&integrationsChanged)return commitSectionsAtomically(new Map<ConfigSection,unknown>([
+    ['scorecards',{cards:[...current.scorecards.cards,...additions]}],['integrations',integrations]
+  ]),{scorecards:source.files.scorecards?.sha,integrations:expectedBlobSha},actor)
+  if(additions.length)return commitSection('scorecards',{cards:[...current.scorecards.cards,...additions]},source.files.scorecards?.sha,actor)
+  return integrationsChanged?commitSection('integrations',integrations,expectedBlobSha,actor):{changed:[],source:getConfigSource()}
 }
 
 export function configPushMatches(payload:any){

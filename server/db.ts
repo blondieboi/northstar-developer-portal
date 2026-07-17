@@ -749,7 +749,7 @@ export async function createMetadataCampaign(input: {
           input.title,
           input.description,
           input.fieldPath,
-          input.desiredValue,
+          JSON.stringify(input.desiredValue),
           input.filters,
           input.createdBy,
         ],
@@ -764,8 +764,10 @@ export async function createMetadataCampaign(input: {
           target.serviceId,
           target.serviceName,
           target.repository,
-          target.beforeValue,
-          target.afterValue,
+          target.beforeValue === undefined
+            ? null
+            : JSON.stringify(target.beforeValue),
+          JSON.stringify(target.afterValue),
           target.patch,
           target.confidence,
         ],
@@ -880,6 +882,75 @@ export async function updateCampaignFromPullRequest(input: {
     [input.repository, input.prNumber, status],
   );
   return rows[0]?.campaign_id || null;
+}
+
+export async function createScorecardRemediation(input: {
+  serviceId: string | number;
+  serviceName: string;
+  repository: string;
+  scorecardId: string;
+  ruleId: string;
+  fieldPath: string;
+  beforeValue: unknown;
+  afterValue: unknown;
+  prNumber: number;
+  prUrl: string;
+  branch: string;
+  requestedBy: string;
+}) {
+  if (!pool) return { id: "preview", ...input, status: "pr-open" };
+  return (
+    await pool.query(
+      `insert into scorecard_remediations(service_id,service_name,repository,scorecard_id,rule_id,field_path,before_value,after_value,pr_number,pr_url,branch,requested_by)
+       values($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,$12) returning *`,
+      [
+        input.serviceId,
+        input.serviceName,
+        input.repository,
+        input.scorecardId,
+        input.ruleId,
+        input.fieldPath,
+        input.beforeValue === undefined
+          ? null
+          : JSON.stringify(input.beforeValue),
+        JSON.stringify(input.afterValue),
+        input.prNumber,
+        input.prUrl,
+        input.branch,
+        input.requestedBy,
+      ],
+    )
+  ).rows[0];
+}
+
+export async function listScorecardRemediations(serviceName: string) {
+  if (!pool) return [];
+  return pool
+    .query(
+      "select * from scorecard_remediations where service_name=$1 order by created_at desc",
+      [serviceName],
+    )
+    .then((result) => result.rows);
+}
+
+export async function updateRemediationFromPullRequest(input: {
+  repository: string;
+  prNumber: number;
+  merged: boolean;
+  closed: boolean;
+}) {
+  if (!pool) return null;
+  const status = input.merged
+    ? "completed"
+    : input.closed
+      ? "closed"
+      : "pr-open";
+  const { rows } = await pool.query(
+    `update scorecard_remediations set status=$3,updated_at=now()
+     where repository=$1 and pr_number=$2 returning id`,
+    [input.repository, input.prNumber, status],
+  );
+  return rows[0]?.id || null;
 }
 
 export async function createWaiver(input: {

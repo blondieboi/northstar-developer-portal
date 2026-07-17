@@ -10,6 +10,7 @@ import {
   Workflow,
 } from "lucide-react";
 import { useMemo, useState } from "react";
+import { PageIntro } from "./ui/PageIntro";
 
 type Attention = {
   id: string;
@@ -167,20 +168,16 @@ export function EngineeringInbox({
   const urgent = items.filter((item) => item.severity === "urgent").length;
   return (
     <div className="page inbox-page">
-      <div className="page-intro">
-        <div>
-          <p className="eyebrow">ATTENTION QUEUE</p>
-          <h1>Engineering inbox</h1>
-          <p>
-            One place for delivery, security, ownership, catalog, and standards
-            work.
-          </p>
-        </div>
+      <PageIntro
+        eyebrow="ATTENTION QUEUE"
+        title="Engineering inbox"
+        description="One place for delivery, security, ownership, catalog, and standards work."
+      >
         <div className={urgent ? "inbox-pulse urgent" : "inbox-pulse"}>
           <strong>{urgent}</strong>
           <span>urgent</span>
         </div>
-      </div>
+      </PageIntro>
       <div className="inbox-summary">
         <div>
           <strong>{items.length}</strong>

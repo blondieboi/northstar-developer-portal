@@ -66,6 +66,8 @@ describe("GitHub Actions plugin", () => {
       totalRuns: 2,
       successRate: 50,
       lastSuccessfulRunAt: "2026-07-15T10:03:00Z",
+      medianDurationMinutes: 3,
+      failureStreak: 0,
     });
     expect(data.workflows).toHaveLength(2);
     expect(request).toHaveBeenCalledWith(

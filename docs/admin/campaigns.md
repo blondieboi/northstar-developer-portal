@@ -28,3 +28,5 @@ The GitHub App needs **Contents: read and write** and **Pull requests: read and 
 ## Boundaries
 
 Campaigns are intentionally not a general workflow orchestrator. They perform one narrow operation: propose reviewable repository metadata changes and track the resulting GitHub pull requests. Runtime provisioning and service operations continue to use published GitHub Actions.
+
+Campaign scope can be segmented by owner, current tier, service type, lifecycle, or an explicit service. Launches use a configurable batch size (1–100 repositories), so administrators can canary a change, review the first pull requests, and continue the same campaign in later batches. Failed targets remain retryable and individual targets can be excluded with a recorded reason.

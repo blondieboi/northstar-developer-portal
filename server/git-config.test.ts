@@ -1,6 +1,6 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import { configSections, defaults, serializeSection, type ConfigSection } from './config.js'
-import { commitIntegrations, commitSection, ConfigConflictError, configDirectoryChanged, configPushMatches, getConfigSource, initializeGitConfig, resetGitConfigForTests, setGitConfigOctokitFactoryForTests, syncGitConfig } from './git-config.js'
+import { commitIntegrations, commitSection, ConfigConflictError, configDirectoryChanged, configPushMatches, getConfigSource, initializeGitConfig, previewConfigChange, resetGitConfigForTests, setGitConfigOctokitFactoryForTests, syncGitConfig } from './git-config.js'
 
 const saved={...process.env}
 describe('Git configuration push routing',()=>{
@@ -64,8 +64,17 @@ describe('Git configuration push routing',()=>{
     const documents=Object.fromEntries(configSections.map(section=>[section,serializeSection(section,defaults[section])])) as Record<ConfigSection,string>
     const blobShas=Object.fromEntries(configSections.map(section=>[section,`base-${section}`])) as Record<ConfigSection,string>
     const writes:string[]=[]
+    const blobs=new Map<string,string>()
     const request=vi.fn(async(route:string,params:any)=>{
       if(route.includes('/git/ref/'))return{data:{object:{sha:`revision-${revision}`}}}
+      if(route.startsWith('GET /repos/{owner}/{repo}/git/commits'))return{data:{tree:{sha:`tree-${revision}`}}}
+      if(route.startsWith('POST /repos/{owner}/{repo}/git/blobs')){const sha=`new-blob-${blobs.size}`;blobs.set(sha,params.content);return{data:{sha}}}
+      if(route.startsWith('POST /repos/{owner}/{repo}/git/trees')){
+        for(const entry of params.tree){const section=String(entry.path).split('/').pop()!.replace('.yaml','') as ConfigSection;documents[section]=blobs.get(entry.sha)!;blobShas[section]=entry.sha;writes.push(section)}
+        return{data:{sha:'new-tree'}}
+      }
+      if(route.startsWith('POST /repos/{owner}/{repo}/git/commits'))return{data:{sha:'revision-1'}}
+      if(route.startsWith('PATCH /repos/{owner}/{repo}/git/refs')){revision=1;return{data:{object:{sha:'revision-1'}}}}
       const section=String(params.path).split('/').pop()!.replace('.yaml','') as ConfigSection
       if(route.startsWith('PUT')){
         documents[section]=Buffer.from(params.content,'base64').toString('utf8');writes.push(section);revision+=1;blobShas[section]=`blob-${revision}-${section}`
@@ -75,8 +84,11 @@ describe('Git configuration push routing',()=>{
     })
     setGitConfigOctokitFactoryForTests((async()=>({request})) as any)
     await initializeGitConfig(async()=>{})
+    const preview=previewConfigChange('integrations',{plugins:[{id:'github-repository-standards',enabled:true,config:{}}]})
+    expect(preview.sections.map(change=>change.section)).toEqual(['scorecards','integrations'])
     await commitIntegrations({plugins:[{id:'github-repository-standards',enabled:true,config:{}}]},'base-integrations',{login:'admin',id:1,name:'Admin'})
     expect(writes).toEqual(['scorecards','integrations'])
+    expect(request.mock.calls.filter(([route])=>String(route).startsWith('POST /repos/{owner}/{repo}/git/commits'))).toHaveLength(1)
     expect(documents.scorecards).toContain('id: repository-standards')
     expect(documents.integrations).toContain('id: github-repository-standards')
   })

@@ -106,6 +106,10 @@ function GitHubActionsServicePanel({ data }: ServicePluginProps) {
               { value: data.totalRuns, label: "Runs in lookback window" },
               { value: data.workflows?.length || 0, label: "Active workflows" },
               {
+                value: data.medianDurationMinutes === null ? "—" : `${data.medianDurationMinutes}m`,
+                label: "Median duration",
+              },
+              {
                 value: data.lastSuccessfulRunAt
                   ? new Date(data.lastSuccessfulRunAt).toLocaleDateString()
                   : "—",
@@ -113,6 +117,11 @@ function GitHubActionsServicePanel({ data }: ServicePluginProps) {
               },
             ]}
           />
+          {data.failureStreak > 0 && (
+            <div className="plugin-attention-note">
+              <X size={13} /> {data.failureStreak} consecutive failed run{data.failureStreak === 1 ? "" : "s"}
+            </div>
+          )}
           {data.runs?.length ? (
             <div className="workflow-runs">
               {data.runs.slice(0, 6).map((run: any) => (
@@ -245,6 +254,23 @@ function StandardsPanel({ data }: ServicePluginProps) {
               </div>
             ))}
           </div>
+          {(data.governanceSource || data.codeownersErrors?.length > 0) && (
+            <div className="repository-governance-detail">
+              {data.governanceSource && (
+                <p>
+                  Default-branch governance: <strong>{data.governanceSource}</strong>
+                  {data.activeRules?.length
+                    ? ` · ${data.activeRules.length} active rules`
+                    : ""}
+                </p>
+              )}
+              {data.codeownersErrors?.map((error: any, index: number) => (
+                <p className="warn" key={`${error.line}-${index}`}>
+                  CODEOWNERS line {error.line}: {error.message}
+                </p>
+              ))}
+            </div>
+          )}
         </>
       )}
     </Section>

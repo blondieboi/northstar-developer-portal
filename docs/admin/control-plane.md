@@ -21,6 +21,8 @@ Open **Settings** to edit:
 
 When an administrator opens a section, Perongen records the Git blob SHA. Saving sends that expected SHA with the new value. If someone changed the file in GitHub since it was loaded, the commit is rejected as a conflict instead of overwriting their work.
 
+While editing, the control plane validates the complete candidate configuration and previews every YAML file that will change, including line additions and deletions. Changes that span multiple files are written as one Git commit. For example, enabling a plugin that contributes a default scorecard updates `integrations.yaml` and `scorecards.yaml` atomically, so an interrupted write cannot enable one without the other.
+
 Refresh the section, review the external change, reapply the intended edit, and save again.
 
 ## External commits

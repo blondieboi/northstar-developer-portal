@@ -90,6 +90,9 @@ describe("GitHub plugin suite", () => {
           },
         };
       if (route.includes("/protection")) return { data: {} };
+      if (route.includes("/rules/branches/"))
+        return { data: [{ type: "pull_request", ruleset_source_type: "Organization", ruleset_source: "acme", ruleset_id: 7 }] };
+      if (route.includes("/codeowners/errors")) return { data: { errors: [] } };
       if (route.includes("/contents/"))
         return params.path.includes("README") ||
           params.path.includes("CODEOWNERS")
@@ -109,6 +112,8 @@ describe("GitHub plugin suite", () => {
       topics: true,
     });
     expect(data.coverage).toBeGreaterThan(50);
+    expect(data.governanceSource).toBe("branch protection + rulesets");
+    expect(data.activeRules[0]).toMatchObject({ type: "pull_request", sourceType: "Organization" });
   });
 
   it("degrades restricted security signals without failing the plugin", async () => {

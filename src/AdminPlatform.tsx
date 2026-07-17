@@ -58,11 +58,16 @@ export function CampaignsPage({
     owner: "",
     tier: "",
     type: "",
+    lifecycle: "",
+    service: "",
   });
+  const [batchSize, setBatchSize] = useState(10);
   const filters = {
     ...(form.owner ? { owners: [form.owner] } : {}),
     ...(form.tier ? { tiers: [form.tier] } : {}),
     ...(form.type ? { types: [form.type] } : {}),
+    ...(form.lifecycle ? { lifecycles: [form.lifecycle] } : {}),
+    ...(form.service ? { services: [form.service] } : {}),
   };
   const payload = {
     title: form.title,
@@ -121,7 +126,11 @@ export function CampaignsPage({
     if (!selected) return;
     setBusy("launch");
     setError("");
-    api(`/api/admin/campaigns/${selected.id}/launch`, { method: "POST" })
+    api(`/api/admin/campaigns/${selected.id}/launch`, {
+      method: "POST",
+      headers: { "content-type": "application/json" },
+      body: JSON.stringify({ limit: batchSize }),
+    })
       .then(() => {
         refresh();
         loadCampaign(String(selected.id));
@@ -165,6 +174,16 @@ export function CampaignsPage({
             <span className={`campaign-status ${selected.status}`}>
               {selected.status}
             </span>
+            <label className="batch-size">
+              Batch
+              <input
+                type="number"
+                min="1"
+                max="100"
+                value={batchSize}
+                onChange={(event) => setBatchSize(Number(event.target.value))}
+              />
+            </label>
             <button
               className="primary-button"
               disabled={busy === "launch"}
@@ -247,6 +266,7 @@ export function CampaignsPage({
       </div>
     );
   const owners = [...new Set(services.map((service) => service.owner))].sort();
+  const lifecycles = [...new Set(services.map((service) => service.lifecycle).filter(Boolean))].sort();
   return (
     <div className="page campaigns-page">
       <section className="page-intro campaign-intro">
@@ -390,6 +410,30 @@ export function CampaignsPage({
                   <option value={type.id} key={type.id}>
                     {type.title}
                   </option>
+                ))}
+              </select>
+            </label>
+            <label>
+              Lifecycle
+              <select
+                value={form.lifecycle}
+                onChange={(event) => setForm({ ...form, lifecycle: event.target.value })}
+              >
+                <option value="">All lifecycles</option>
+                {lifecycles.map((lifecycle) => (
+                  <option value={lifecycle} key={lifecycle}>{lifecycle}</option>
+                ))}
+              </select>
+            </label>
+            <label>
+              Specific service
+              <select
+                value={form.service}
+                onChange={(event) => setForm({ ...form, service: event.target.value })}
+              >
+                <option value="">All matching services</option>
+                {[...services].sort((a, b) => a.name.localeCompare(b.name)).map((service) => (
+                  <option value={service.name} key={service.name}>{service.name}</option>
                 ))}
               </select>
             </label>

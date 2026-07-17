@@ -7,6 +7,7 @@ import {
   catalogSummary,
   campaignTargets,
   createMetadataCampaign,
+  createScorecardRemediation,
   createWaiver,
   decideWaiver,
   findServiceByName,
@@ -16,6 +17,7 @@ import {
   listServiceDocuments,
   listServiceScoreHistory,
   listServices,
+  listScorecardRemediations,
   listTeams,
   listUsers,
   listWaivers,
@@ -31,6 +33,7 @@ import {
   updateCampaignFromPullRequest,
   updateCampaignStatus,
   updateCampaignTarget,
+  updateRemediationFromPullRequest,
   upsertUser,
   webhookSeen,
 } from "./db.js";
@@ -63,6 +66,7 @@ import {
 import {
   commitIntegrations,
   commitSection,
+  previewConfigChange,
   ConfigConflictError,
   ConfigUnavailableError,
   configDirectoryChanged,
@@ -86,6 +90,7 @@ import {
   mapWithConcurrency,
   openMetadataPullRequest,
   operationalSnapshot,
+  valueAtPath,
 } from "./platform.js";
 import { backfillServiceDocuments } from "./documents.js";
 
@@ -170,6 +175,50 @@ server.get<{ Params: { serviceName: string } }>(
 server.get<{ Querystring: { service?: string } }>(
   "/api/standards/waivers",
   async (request) => ({ waivers: await listWaivers(request.query.service) }),
+);
+server.get<{ Params: { serviceName: string } }>(
+  "/api/services/:serviceName/remediations",
+  async (request, reply) => {
+    const service = await findServiceByName(request.params.serviceName);
+    if (!service) return reply.code(404).send({ error: "Service not found" });
+    return { remediations: await listScorecardRemediations(service.name) };
+  },
+);
+server.post<{
+  Params: { serviceName: string };
+  Body: { scorecardId: string; ruleId: string };
+}>(
+  "/api/services/:serviceName/remediations/preview",
+  { preHandler: requireUser },
+  async (request, reply) => {
+    const service = await findServiceByName(request.params.serviceName);
+    if (!service) return reply.code(404).send({ error: "Service not found" });
+    const card = getConfig().scorecards.cards.find(
+      (candidate) => candidate.id === request.body?.scorecardId,
+    );
+    const rule = card?.rules.find(
+      (candidate) => candidate.id === request.body?.ruleId,
+    );
+    if (
+      !rule?.remediation ||
+      rule.remediation.suggestedValue === undefined ||
+      rule.source?.kind === "plugin"
+    )
+      return reply
+        .code(400)
+        .send({ error: "This rule does not define an automatic metadata fix" });
+    return {
+      preview: {
+        serviceName: service.name,
+        repository: service.repository,
+        metadataPath: service.metadata_path,
+        fieldPath: rule.path,
+        beforeValue: valueAtPath(service.metadata || {}, rule.path) ?? null,
+        afterValue: rule.remediation.suggestedValue,
+        title: `chore: satisfy ${rule.title}`,
+      },
+    };
+  },
 );
 server.post<{
   Body: {
@@ -256,11 +305,28 @@ server.post<{
       entityKind: "service",
       entityKey: service.name,
       properties: {
+        scorecardId: request.body.scorecardId,
         ruleId: rule.id,
         pullRequest: pull.number,
+        pullRequestUrl: pull.url,
         alreadySatisfied: pull.alreadySatisfied,
       },
     });
+    if (!pull.alreadySatisfied)
+      await createScorecardRemediation({
+        serviceId: service.id,
+        serviceName: service.name,
+        repository: service.repository,
+        scorecardId: request.body.scorecardId,
+        ruleId: rule.id,
+        fieldPath: rule.path,
+        beforeValue: valueAtPath(service.metadata || {}, rule.path),
+        afterValue: remediation.suggestedValue,
+        prNumber: pull.number!,
+        prUrl: pull.url!,
+        branch: pull.branch!,
+        requestedBy: user!.login,
+      });
     return reply
       .code(pull.alreadySatisfied ? 200 : 201)
       .send({ pullRequest: pull });
@@ -566,6 +632,20 @@ server.post(
     }
   },
 );
+server.post<{
+  Params: { section: ConfigSection };
+  Body: { value: unknown };
+}>(
+  "/api/admin/config/:section/preview",
+  { preHandler: requireAdmin },
+  async (request, reply) => {
+    try {
+      return previewConfigChange(request.params.section, request.body?.value);
+    } catch (e) {
+      return configError(reply, e);
+    }
+  },
+);
 server.put<{
   Params: { section: ConfigSection };
   Body: { value: unknown; expectedBlobSha?: string };
@@ -762,13 +842,14 @@ server.post<{
     return reply.code(201).send({ campaign, targets });
   },
 );
-server.post<{ Params: { id: string } }>(
+server.post<{ Params: { id: string }; Body: { limit?: number } }>(
   "/api/admin/campaigns/:id/launch",
   { preHandler: requireAdmin },
   async (request, reply) => {
     const [campaign] = await listMetadataCampaigns(request.params.id);
     if (!campaign) return reply.code(404).send({ error: "Campaign not found" });
-    const targets = await campaignTargets(request.params.id);
+    const limit = Math.max(1, Math.min(100, Number(request.body?.limit || 10)));
+    const targets = (await campaignTargets(request.params.id)).slice(0, limit);
     if (!targets.length)
       return reply.code(400).send({ error: "No pending or failed targets" });
     await updateCampaignStatus(request.params.id, "active");
@@ -808,6 +889,7 @@ server.post<{ Params: { id: string } }>(
       entityKind: "campaign",
       entityKey: request.params.id,
       properties: {
+        batchSize: limit,
         opened: results.filter((result: any) => result.status === "pr-open")
           .length,
         failed: results.filter((result: any) => result.status === "failed")
@@ -902,6 +984,24 @@ server.post("/api/github/webhook", async (request, reply) => {
           installationId,
           status: body.pull_request.merged ? "completed" : "applied",
           message: `Campaign #${campaignId} target updated`,
+        });
+        return reply.code(202).send({ status: "applied" });
+      }
+      const remediationId = await updateRemediationFromPullRequest({
+        repository,
+        prNumber: Number(body.pull_request.number),
+        merged: Boolean(body.pull_request.merged),
+        closed: body.action === "closed",
+      });
+      if (remediationId) {
+        await recordWebhook({
+          deliveryId,
+          event,
+          action: "remediation.update",
+          repository,
+          installationId,
+          status: body.pull_request.merged ? "completed" : "applied",
+          message: `Remediation #${remediationId} updated`,
         });
         return reply.code(202).send({ status: "applied" });
       }

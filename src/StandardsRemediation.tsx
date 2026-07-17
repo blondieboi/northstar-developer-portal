@@ -18,6 +18,13 @@ type Waiver = {
   requested_by: string;
   expires_at: string;
 };
+type Remediation = {
+  id: string;
+  rule_id: string;
+  status: "pr-open" | "completed" | "closed";
+  pr_number: number;
+  pr_url: string;
+};
 
 export function StandardsChecks({
   service,
@@ -31,6 +38,8 @@ export function StandardsChecks({
   signedIn: boolean;
 }) {
   const [waivers, setWaivers] = useState<Waiver[]>([]);
+  const [remediations, setRemediations] = useState<Remediation[]>([]);
+  const [fixPreview, setFixPreview] = useState<any>(null);
   const [requesting, setRequesting] = useState<string | null>(null);
   const [reason, setReason] = useState("");
   const [expiry, setExpiry] = useState(
@@ -39,13 +48,39 @@ export function StandardsChecks({
   const [busy, setBusy] = useState("");
   const [message, setMessage] = useState("");
   const refresh = () =>
-    fetch(`/api/standards/waivers?service=${encodeURIComponent(service.name)}`)
-      .then((response) => (response.ok ? response.json() : { waivers: [] }))
-      .then((data) => setWaivers(data.waivers || []))
+    Promise.all([
+      fetch(`/api/standards/waivers?service=${encodeURIComponent(service.name)}`).then((response) =>
+        response.ok ? response.json() : { waivers: [] },
+      ),
+      fetch(`/api/services/${encodeURIComponent(service.name)}/remediations`).then((response) =>
+        response.ok ? response.json() : { remediations: [] },
+      ),
+    ])
+      .then(([waiverData, remediationData]) => {
+        setWaivers(waiverData.waivers || []);
+        setRemediations(remediationData.remediations || []);
+      })
       .catch(() => {});
   useEffect(() => {
     void refresh();
   }, [service.name]);
+  const previewFix = async (rule: ScorecardRule) => {
+    setBusy(rule.id);
+    setMessage("");
+    const response = await fetch(
+      `/api/services/${encodeURIComponent(service.name)}/remediations/preview`,
+      {
+        method: "POST",
+        headers: { "content-type": "application/json" },
+        body: JSON.stringify({ scorecardId, ruleId: rule.id }),
+      },
+    );
+    const data = await response.json();
+    setBusy("");
+    if (!response.ok)
+      return setMessage(data.error || "Fix preview could not be created");
+    setFixPreview({ ruleId: rule.id, ...data.preview });
+  };
   const openFix = async (rule: ScorecardRule) => {
     setBusy(rule.id);
     setMessage("");
@@ -61,11 +96,13 @@ export function StandardsChecks({
     setBusy("");
     if (!response.ok)
       return setMessage(data.error || "Fix PR could not be opened");
+    setFixPreview(null);
     if (data.pullRequest.alreadySatisfied)
       setMessage("The repository already contains the suggested value");
     else {
       setMessage(`Pull request #${data.pullRequest.number} opened`);
       window.open(data.pullRequest.url, "_blank", "noopener");
+      void refresh();
     }
   };
   const requestWaiver = async (rule: ScorecardRule) => {
@@ -103,6 +140,9 @@ export function StandardsChecks({
             candidate.status !== "rejected" &&
             new Date(candidate.expires_at) > new Date(),
         );
+        const latestRemediation = remediations.find(
+          (candidate) => candidate.rule_id === check.id,
+        );
         return (
           <div
             className={pass ? "service-check" : "service-check needs-work"}
@@ -135,6 +175,41 @@ export function StandardsChecks({
                   {" · until "}
                   {new Date(waiver.expires_at).toLocaleDateString()}
                 </p>
+              )}
+              {latestRemediation && (
+                <a
+                  className={`remediation-history ${latestRemediation.status}`}
+                  href={latestRemediation.pr_url}
+                  target="_blank"
+                  rel="noopener"
+                >
+                  <GitPullRequest size={12} /> PR #{latestRemediation.pr_number} ·{" "}
+                  {latestRemediation.status === "pr-open"
+                    ? "review in progress"
+                    : latestRemediation.status}
+                </a>
+              )}
+              {!pass && fixPreview?.ruleId === check.id && (
+                <div className="remediation-preview">
+                  <span>Proposed metadata change</span>
+                  <strong>{fixPreview.fieldPath}</strong>
+                  <div>
+                    <code>{JSON.stringify(fixPreview.beforeValue)}</code>
+                    <span>→</span>
+                    <code>{JSON.stringify(fixPreview.afterValue)}</code>
+                  </div>
+                  <small>{fixPreview.repository}/{fixPreview.metadataPath}</small>
+                  <button
+                    className="primary-button"
+                    disabled={busy === check.id}
+                    onClick={() => openFix(check)}
+                  >
+                    Confirm and open PR
+                  </button>
+                  <button className="text-button" onClick={() => setFixPreview(null)}>
+                    Cancel
+                  </button>
+                </div>
               )}
               {!pass && requesting === check.id && (
                 <div className="waiver-form">
@@ -182,9 +257,9 @@ export function StandardsChecks({
                     <button
                       className="text-button"
                       disabled={busy === check.id}
-                      onClick={() => openFix(check)}
+                      onClick={() => previewFix(check)}
                     >
-                      <GitPullRequest size={13} /> Open fix PR
+                      <GitPullRequest size={13} /> Preview fix PR
                     </button>
                   )}
                   {!waiver && requesting !== check.id && (

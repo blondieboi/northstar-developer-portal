@@ -1,0 +1,76 @@
+:root {
+  --font-display: Newsreader, Georgia, serif;
+  --font-sans: Manrope, system-ui, sans-serif;
+  --font-mono: "DM Mono", ui-monospace, monospace;
+  --ink: #202622;
+  --muted: #59645d;
+  --line: #d8ded8;
+  --canvas: #f3f5f1;
+  --paper: #fbfcf9;
+  --navy: #21302c;
+  --blue: #b07a32;
+  --blue-2: #c18a42;
+  --green: #39745d;
+  --red: #a84336;
+  --danger: #a84336;
+  --warning: #9b6726;
+  --amber: #b07a32;
+  --purple: #65798a;
+  --soft: #e7ece7;
+  --sidebar: 264px;
+  --shadow: 0 18px 50px rgba(41, 49, 43, 0.06);
+  --radius-sm: 5px;
+  --radius-md: 8px;
+  --radius-lg: 12px;
+  --space-1: 4px;
+  --space-2: 8px;
+  --space-3: 12px;
+  --space-4: 16px;
+  --space-5: 24px;
+  --space-6: 32px;
+  --space-7: 48px;
+}
+:root[data-theme="dark"] {
+  --ink: #f2f4ef;
+  --muted: #b5beb6;
+  --line: #465149;
+  --canvas: #171d19;
+  --paper: #222a24;
+  --navy: #111713;
+  --blue: #c99a59;
+  --blue-2: #d5aa70;
+  --green: #72a88e;
+  --red: #e28d7f;
+  --danger: #e28d7f;
+  --warning: #d7aa6d;
+  --amber: #c99a59;
+  --purple: #91a5b4;
+  --soft: #2b342e;
+  --shadow: 0 18px 60px rgba(0, 0, 0, 0.2);
+  color-scheme: dark;
+}
+html {
+  background: var(--canvas);
+  transition:
+    background 0.35s ease,
+    color 0.35s ease;
+}
+body {
+  background: var(--canvas);
+  color: var(--ink);
+  font-size: 14px;
+}
+button,
+input,
+select,
+textarea {
+  color: inherit;
+}
+button:focus-visible,
+input:focus-visible,
+select:focus-visible,
+textarea:focus-visible,
+a:focus-visible {
+  outline: 2px solid var(--blue);
+  outline-offset: 3px;
+}

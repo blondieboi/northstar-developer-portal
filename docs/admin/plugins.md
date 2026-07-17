@@ -12,6 +12,8 @@ Some plugins contribute a default scorecard. When **GitHub repository standards*
 
 Deployments upgraded from an earlier release may already have the provider enabled without its scorecard. In that case, **Settings → Integrations** shows the missing configuration; choose **Add scorecard** to commit and apply `scorecards.yaml` immediately.
 
+Repository standards evaluates default-branch governance from both classic branch protection and active repository or organization rulesets. It also validates the default branch's CODEOWNERS file through GitHub's syntax-error endpoint; a present but invalid file does not pass the ownership check. The service dossier identifies the governance source, active rule count, and actionable CODEOWNERS errors. GitHub Actions snapshots include success rate, consecutive failures, and median duration for the configured lookback window.
+
 ## Built-in GitHub suite
 
 All six built-in plugins use each service's synchronized repository and installation ID.
