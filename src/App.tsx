@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useRef, useState } from "react";
+import { useEffect, useLayoutEffect, useMemo, useRef, useState } from "react";
 import {
   Activity,
   ArrowRight,
@@ -2408,6 +2408,9 @@ export function App() {
   useEffect(() => {
     document.documentElement.dataset.theme = theme;
   }, [theme]);
+  useLayoutEffect(() => {
+    window.scrollTo(0, 0);
+  }, [view, selectedService?.name, selectedTeam?.name]);
   useEffect(() => {
     const open = (event: KeyboardEvent) => {
       if ((event.metaKey || event.ctrlKey) && event.key.toLowerCase() === "k") {

@@ -118,13 +118,25 @@ export function ConfiguredScorecards({
           <p>
             {card.description || "Weighted checks across applicable services."}
           </p>
-          <div className="hero-meta">
-            <span>{active.length} checks</span>
-            <span>{services.length} services</span>
-            <span>{evaluations} evaluations</span>
+          <div className="hero-meta" aria-label="Scorecard scope">
+            <span>
+              <strong>{active.length}</strong>
+              checks
+            </span>
+            <span>
+              <strong>{services.length}</strong>
+              services
+            </span>
+            <span>
+              <strong>{evaluations}</strong>
+              evaluations
+            </span>
           </div>
         </div>
-        {ring(avg)}
+        <div className="score-hero-score">
+          {ring(avg)}
+          <span>Average coverage</span>
+        </div>
       </section>
       <div className="score-layout">
         <section className="rules">

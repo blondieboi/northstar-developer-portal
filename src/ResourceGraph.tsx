@@ -75,20 +75,26 @@ export function ResourceGraph({
   }, [nodes, edges, query]);
   const kinds = [...new Set(visible.map((node) => node.kind))];
   const positions = new Map<string, { x: number; y: number }>();
-  kinds.forEach((kind, column) => {
-    visible
-      .filter((node) => node.kind === kind)
-      .forEach((node, row) =>
-        positions.set(node.id, { x: 130 + column * 230, y: 75 + row * 84 }),
-      );
-  });
-  const width = Math.max(720, kinds.length * 230 + 60);
-  const height = Math.max(
-    420,
-    ...kinds.map(
-      (kind) => visible.filter((node) => node.kind === kind).length * 84 + 80,
-    ),
+  const width = 780;
+  const largestColumn = Math.max(
+    1,
+    ...kinds.map((kind) => visible.filter((node) => node.kind === kind).length),
   );
+  const height = Math.max(360, largestColumn * 96 + 112);
+  kinds.forEach((kind, column) => {
+    const columnNodes = visible.filter((node) => node.kind === kind);
+    const x =
+      kinds.length === 1
+        ? width / 2
+        : 142 + column * ((width - 284) / (kinds.length - 1));
+    const columnHeight = (columnNodes.length - 1) * 96;
+    columnNodes.forEach((node, row) =>
+      positions.set(node.id, {
+        x,
+        y: height / 2 - columnHeight / 2 + row * 96 + 18,
+      }),
+    );
+  });
   return (
     <div className="page graph-page">
       <section className="page-intro graph-intro">
@@ -150,8 +156,12 @@ export function ResourceGraph({
                 {kinds.map((kind, column) => (
                   <text
                     className="graph-column-label"
-                    x={130 + column * 230}
-                    y="30"
+                    x={
+                      kinds.length === 1
+                        ? width / 2
+                        : 142 + column * ((width - 284) / (kinds.length - 1))
+                    }
+                    y="34"
                     textAnchor="middle"
                     key={kind}
                   >
@@ -196,7 +206,7 @@ export function ResourceGraph({
                           ? "graph-node selected"
                           : "graph-node"
                       }
-                      transform={`translate(${point.x - 82} ${point.y - 27})`}
+                      transform={`translate(${point.x - 94} ${point.y - 30})`}
                       onClick={() => setSelected(node.id)}
                       role="button"
                       tabIndex={0}
@@ -206,11 +216,11 @@ export function ResourceGraph({
                       }}
                       key={node.id}
                     >
-                      <rect width="164" height="54" rx="5" />
-                      <text x="12" y="23">
+                      <rect width="188" height="60" rx="5" />
+                      <text x="14" y="25">
                         {node.title}
                       </text>
-                      <text className="graph-node-meta" x="12" y="41">
+                      <text className="graph-node-meta" x="14" y="45">
                         {node.kind === "service"
                           ? node.owner || "No owner"
                           : node.kind}
