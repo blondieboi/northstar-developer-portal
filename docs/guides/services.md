@@ -28,14 +28,15 @@ Merge the file into a repository visible to the GitHub App. A push webhook that 
 
 ## Find a service
 
-Catalog search matches service name, owner, and system. Filter by tier, service type, or both to focus on the relevant class. Each row shows the configured classification and current metadata score. Select a row to open the complete service dossier.
+Catalog search matches service name, owner, and system. Filter by tier, service type, or both to focus on the relevant class. Each row shows the configured classification and current metadata score. Select a row to open its shareable `/catalog/:service-name` dossier. The global command palette (`⌘K` on macOS or `Ctrl+K` elsewhere) searches services, teams, people, actions, and tools.
 
 ## Read a service dossier
 
 The dossier groups information by purpose:
 
 - **Standards** shows every scorecard result and the primary card's applicable checks.
-- **Plugin sections** such as GitHub Actions show normalized operational signals collected for the service repository.
+- **Scorecard history** records changes so regressions and improvements are visible.
+- **Plugin sections** show normalized Actions, pull request, standards, deployment, security, and maintenance signals.
 - **Useful destinations** comes from `spec.links`.
 - **Signals** records the latest catalog and repository state available to Perongen.
 - **Stored metadata** shows the exact synchronized document.
@@ -45,7 +46,7 @@ The dossier groups information by purpose:
 
 Edit `.portal/service.yaml` in the source repository, then merge and synchronize it. Service data cannot be edited directly in Perongen because that would split the source of truth.
 
-If the service never appears, validate the metadata path, document shape, GitHub App installation access, and latest delivery under **Settings → Integrations**. See [Troubleshooting](/reference/troubleshooting#service-does-not-appear).
+If the service never appears, validate the metadata path, document shape, GitHub App installation access, and latest delivery under **Settings → Integrations**. The Catalog screen preserves repository-level validation failures from the latest synchronization and links directly to the rejected metadata file. See [Troubleshooting](/reference/troubleshooting#service-does-not-appear).
 
 ## Remove or retire a service
 

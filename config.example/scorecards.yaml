@@ -52,3 +52,45 @@ scorecards:
           weight: 1
           severity: recommended
           enabled: true
+        - id: pull-request-backlog
+          title: Pull request backlog is current
+          description: No pull requests are stale beyond the configured threshold
+          source:
+            kind: plugin
+            plugin: github-pull-requests
+          path: staleCount
+          operator: equals
+          value: 0
+          weight: 1
+          severity: recommended
+          enabled: true
+        - id: repository-standards
+          title: Repository standards are complete
+          description: Required repository safeguards and community files are present
+          source:
+            kind: plugin
+            plugin: github-repository-standards
+          path: coverage
+          operator: equals
+          value: 100
+          weight: 1
+          severity: recommended
+          enabled: true
+    - id: security-posture
+      title: Security posture
+      description: Security signals collected through the GitHub App
+      enabled: true
+      primary: false
+      rules:
+        - id: no-critical-alerts
+          title: No high-priority security alerts
+          description: Dependabot and secret-scanning alerts require immediate ownership
+          source:
+            kind: plugin
+            plugin: github-security
+          path: criticalAlerts
+          operator: equals
+          value: 0
+          weight: 2
+          severity: required
+          enabled: true

@@ -8,22 +8,35 @@ Open **Settings → Integrations**, enable the provider, adjust its options, and
 
 Plugin settings are non-secret and live in `integrations.yaml`. Provider credentials remain deployment-only. Disabling a plugin stops collection and removes its service and scorecard facts; cached snapshots remain available for recovery but are not evaluated.
 
-## GitHub Actions
+## Built-in GitHub suite
 
-The bundled GitHub Actions plugin uses each service's synchronized repository and installation ID. It collects recent workflow runs, workflow names, latest success time, and success rate. A service dossier displays the latest runs with direct GitHub links.
+All six built-in plugins use each service's synchronized repository and installation ID.
 
-Configure:
+| Plugin | Signals |
+| --- | --- |
+| GitHub Actions | Workflow runs, success rate, and latest successful run |
+| GitHub pull requests | Open, draft, review-requested, stale, and oldest pull requests |
+| GitHub repository standards | CODEOWNERS, documentation, policy, topics, and branch safeguards |
+| GitHub deployments and releases | Environment deployments, delivery status, and latest release |
+| GitHub security | Dependabot, code-scanning, and secret-scanning alerts |
+| GitHub maintenance | Issue backlog, stale issues, contributors, and commit freshness |
 
-- `lookbackDays` from 1 through 365;
-- `maximumRuns` from 1 through 100.
+Configurable thresholds include:
 
-Collection runs after service synchronization, from the manual refresh control, after plugin configuration changes, and for signed `workflow_run` deliveries. Provider failures are stored as degraded snapshots and do not fail catalog synchronization.
+- Actions `lookbackDays` and `maximumRuns`;
+- pull request `staleAfterDays` and `maximumPullRequests`;
+- deployments `maximumDeployments`;
+- maintenance `staleAfterDays`.
+
+Collection runs after service synchronization, from the manual refresh control, after plugin configuration changes, and for relevant signed repository events. Provider failures are stored as degraded snapshots and do not fail catalog synchronization.
 
 ## Data and failure isolation
 
 Plugin snapshots use a generic PostgreSQL store keyed by plugin, entity kind, and entity key. Each snapshot records status, data, error, observation time, and expiry. Core service rows do not gain provider-specific columns.
 
 Plugin-backed scorecard rules become not applicable when their provider is disabled or has never produced data. This prevents a connection outage from being misreported as a service standards failure.
+
+Available plugin facts also feed the Engineering inbox. Last successful snapshot data remains available when a later refresh fails, while health reports the failure. Expired snapshots are labeled stale.
 
 ## Adding a built-in plugin
 

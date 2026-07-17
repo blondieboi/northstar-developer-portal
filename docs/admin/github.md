@@ -11,8 +11,17 @@ Create a GitHub App owned by the organization that owns the catalog repositories
 | Contents | Read and write | Read catalog metadata and commit canonical configuration |
 | Metadata | Read | Discover installed repositories |
 | Actions | Write | Read workflow activity and dispatch configured workflows |
+| Pull requests | Read | Build review queues and stale pull request signals |
+| Issues | Read | Measure maintenance backlog and issue freshness |
+| Deployments | Read | Read environment deployment status |
+| Administration | Read | Inspect default-branch protection |
+| Dependabot alerts | Read | Report vulnerable dependency alerts |
+| Code scanning alerts | Read | Report code-scanning findings |
+| Secret scanning alerts | Read | Report exposed-secret findings |
 
-Subscribe the App to **Push** and **Workflow run** events. Push events synchronize configuration and metadata. Workflow run events refresh GitHub Actions plugin data for the affected service.
+Restricted security or repository-policy endpoints appear as unavailable signals instead of failing the complete plugin refresh. The service dossier explains when the GitHub App needs more access.
+
+Subscribe the App to **Push**, **Workflow run**, **Pull request**, **Deployment**, **Deployment status**, **Issues**, and **Release** events. Push events synchronize configuration and metadata. Repository events refresh plugin data for the affected service.
 
 ## Configure URLs
 
