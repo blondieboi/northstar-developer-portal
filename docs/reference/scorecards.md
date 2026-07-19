@@ -5,7 +5,7 @@ Scorecard configuration contains one or more named cards. Exactly one card is pr
 When a failing metadata-backed rule defines a suggested remediation, the service dossier previews the exact field, current value, proposed value, repository, and metadata path before any write occurs. Confirming opens a reviewable GitHub pull request. Its open, merged, or closed state remains visible beside the check and is updated by signed pull-request webhooks.
 
 ```yaml
-apiVersion: northstar.dev/v1
+apiVersion: perongen.dev/v1
 scorecards:
   cards:
     - id: metadata-quality

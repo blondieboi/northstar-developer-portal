@@ -7,7 +7,7 @@ Catalog synchronization discovers installed repositories, validates their metada
 In `catalog.yaml` or **Settings → Catalog**, configure:
 
 ```yaml
-apiVersion: northstar.dev/v1
+apiVersion: perongen.dev/v1
 catalog:
   serviceMetadataPath: .portal/service.yaml
   teamMetadataPath: .portal/team.yaml

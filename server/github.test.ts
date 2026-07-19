@@ -7,7 +7,7 @@ import {
 } from "./github.js";
 
 const complete = {
-  apiVersion: "northstar.dev/v1",
+  apiVersion: "perongen.dev/v1",
   kind: "Service" as const,
   metadata: {
     name: "checkout-api",
@@ -142,7 +142,7 @@ describe("service metadata", () => {
 describe("team metadata", () => {
   it("accepts GitHub usernames as authoritative members", () => {
     const team = teamSchema.parse({
-      apiVersion: "northstar.dev/v1",
+      apiVersion: "perongen.dev/v1",
       kind: "Team",
       metadata: {
         name: "platform",
@@ -162,7 +162,7 @@ describe("team metadata", () => {
   it("rejects an empty team name", () =>
     expect(() =>
       teamSchema.parse({
-        apiVersion: "northstar.dev/v1",
+        apiVersion: "perongen.dev/v1",
         kind: "Team",
         metadata: { name: "", title: "Platform" },
         spec: { members: [] },

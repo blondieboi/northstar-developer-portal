@@ -1,7 +1,7 @@
-apiVersion: northstar.dev/v1
+apiVersion: perongen.dev/v1
 general:
   name: Perongen
   logoUrl: ""
   accentColor: "#b07a32"
   supportUrl: ""
-  documentationUrl: "https://blondieboi.github.io/northstar-developer-portal/"
+  documentationUrl: "https://blondieboi.github.io/perongen-developer-portal/"

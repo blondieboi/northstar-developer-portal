@@ -1,8 +1,8 @@
-apiVersion: northstar.dev/v1
+apiVersion: perongen.dev/v1
 kind: Service
 metadata:
-  name: northstar-developer-portal
-  title: Northstar Developer Portal
+  name: perongen-developer-portal
+  title: Perongen Developer Portal
   description: A simple, self-hosted developer portal for software ownership, standards, and self-service workflows.
   tags:
     - developer-portal
@@ -16,4 +16,4 @@ spec:
   language: TypeScript
   links:
     - name: Documentation
-      url: https://github.com/blondieboi/northstar-developer-portal#readme
+      url: https://github.com/blondieboi/perongen-developer-portal#readme

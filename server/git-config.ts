@@ -22,14 +22,14 @@ export type ConfigChangePreview={
 }
 
 function settings(){
-  const repository=process.env.NORTHSTAR_CONFIG_REPOSITORY?.trim()
-  const branch=process.env.NORTHSTAR_CONFIG_BRANCH?.trim()
-  const directory=process.env.NORTHSTAR_CONFIG_DIRECTORY?.replace(/^\/+|\/+$/g,'').trim()
-  const installationId=Number(process.env.NORTHSTAR_CONFIG_INSTALLATION_ID)
-  if(!repository||!/^[^/\s]+\/[^/\s]+$/.test(repository))throw new Error('NORTHSTAR_CONFIG_REPOSITORY must be owner/repository')
-  if(!branch)throw new Error('NORTHSTAR_CONFIG_BRANCH is required')
-  if(!directory)throw new Error('NORTHSTAR_CONFIG_DIRECTORY is required')
-  if(!Number.isInteger(installationId)||installationId<=0)throw new Error('NORTHSTAR_CONFIG_INSTALLATION_ID must be a positive integer')
+  const repository=process.env.PERONGEN_CONFIG_REPOSITORY?.trim()
+  const branch=process.env.PERONGEN_CONFIG_BRANCH?.trim()
+  const directory=process.env.PERONGEN_CONFIG_DIRECTORY?.replace(/^\/+|\/+$/g,'').trim()
+  const installationId=Number(process.env.PERONGEN_CONFIG_INSTALLATION_ID)
+  if(!repository||!/^[^/\s]+\/[^/\s]+$/.test(repository))throw new Error('PERONGEN_CONFIG_REPOSITORY must be owner/repository')
+  if(!branch)throw new Error('PERONGEN_CONFIG_BRANCH is required')
+  if(!directory)throw new Error('PERONGEN_CONFIG_DIRECTORY is required')
+  if(!Number.isInteger(installationId)||installationId<=0)throw new Error('PERONGEN_CONFIG_INSTALLATION_ID must be a positive integer')
   const [owner,repo]=repository.split('/')
   return{repository,owner,repo,branch,directory,installationId}
 }
@@ -98,7 +98,7 @@ export async function initializeGitConfig(hook:ApplyHook){
 }
 
 export function startConfigPolling(){
-  const seconds=Number(process.env.NORTHSTAR_CONFIG_POLL_INTERVAL_SECONDS||60)
+  const seconds=Number(process.env.PERONGEN_CONFIG_POLL_INTERVAL_SECONDS||60)
   if(!Number.isFinite(seconds)||seconds<=0)return()=>{}
   const timer=setInterval(()=>{syncGitConfig('system:poll').catch(()=>{})},seconds*1000);timer.unref()
   return()=>clearInterval(timer)

@@ -1,4 +1,4 @@
-apiVersion: northstar.dev/v1
+apiVersion: perongen.dev/v1
 scorecards:
   cards:
     - id: metadata-quality

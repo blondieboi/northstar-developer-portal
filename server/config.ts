@@ -26,7 +26,7 @@ export const sectionSchemas={
   integrations:z.object({plugins:z.array(configuredPluginSchema).default([])}).strict(),
   access:z.object({admins:z.array(z.string().min(1)).default([])}).strict()
 } as const
-const baseConfigSchema=z.object({apiVersion:z.literal('northstar.dev/v1'),general:sectionSchemas.general,catalog:sectionSchemas.catalog,scorecards:sectionSchemas.scorecards,actions:sectionSchemas.actions,tools:sectionSchemas.tools,integrations:sectionSchemas.integrations,access:sectionSchemas.access}).strict()
+const baseConfigSchema=z.object({apiVersion:z.literal('perongen.dev/v1'),general:sectionSchemas.general,catalog:sectionSchemas.catalog,scorecards:sectionSchemas.scorecards,actions:sectionSchemas.actions,tools:sectionSchemas.tools,integrations:sectionSchemas.integrations,access:sectionSchemas.access}).strict()
 const compatibleConfigSchema=z.preprocess(value=>value&&typeof value==='object'&&!('integrations' in value)?{...(value as Record<string,unknown>),integrations:{plugins:[]}}:value,baseConfigSchema)
 export const configSchema=compatibleConfigSchema.superRefine((config,context)=>{
   const tierIds=config.catalog.tiers.map(tier=>tier.id)
@@ -53,7 +53,7 @@ export type PortalConfig=z.infer<typeof configSchema>
 export type ConfigSection=keyof typeof sectionSchemas
 export const configSections=Object.keys(sectionSchemas) as ConfigSection[]
 
-export const defaults:PortalConfig={apiVersion:'northstar.dev/v1',general:{name:'Perongen',logoUrl:'',accentColor:'#b07a32',supportUrl:'',documentationUrl:''},catalog:{serviceMetadataPath:'.portal/service.yaml',teamMetadataPath:'.portal/team.yaml',lifecycles:['production','experimental','deprecated'],tiers:[
+export const defaults:PortalConfig={apiVersion:'perongen.dev/v1',general:{name:'Perongen',logoUrl:'',accentColor:'#b07a32',supportUrl:'',documentationUrl:''},catalog:{serviceMetadataPath:'.portal/service.yaml',teamMetadataPath:'.portal/team.yaml',lifecycles:['production','experimental','deprecated'],tiers:[
   {id:'critical',title:'Critical',description:'Customer-facing or business-critical services'},
   {id:'high',title:'High',description:'Important services with significant operational impact'},
   {id:'standard',title:'Standard',description:'Normal production services'},
@@ -89,18 +89,18 @@ export const getConfig=()=>effective
 export function activateConfig(value:unknown){effective=configSchema.parse(value);return effective}
 export function validateSection(section:string,value:unknown){const schema=sectionSchemas[section as ConfigSection];if(!schema)throw new Error(`Unknown configuration section: ${section}`);return schema.parse(value)}
 export function validateConfig(value:unknown){return configSchema.parse(value)}
-export function sectionDocument(section:ConfigSection,value:unknown){return{apiVersion:'northstar.dev/v1',[section]:validateSection(section,value)}}
+export function sectionDocument(section:ConfigSection,value:unknown){return{apiVersion:'perongen.dev/v1',[section]:validateSection(section,value)}}
 export function serializeSection(section:ConfigSection,value:unknown){return YAML.stringify(sectionDocument(section,value),{lineWidth:0})}
 export function parseSectionDocument(section:ConfigSection,raw:string){
   let value:unknown
   try{value=YAML.parse(raw)}catch(e){throw new Error(`${section}.yaml: ${(e as Error).message}`)}
-  const documentSchema=z.object({apiVersion:z.literal('northstar.dev/v1'),[section]:sectionSchemas[section]}).strict()
+  const documentSchema=z.object({apiVersion:z.literal('perongen.dev/v1'),[section]:sectionSchemas[section]}).strict()
   const parsed=documentSchema.safeParse(value)
   if(!parsed.success)throw new Error(`${section}.yaml: ${parsed.error.issues.map(issue=>`${issue.path.join('.')}: ${issue.message}`).join('; ')}`)
   return (parsed.data as Record<string,unknown>)[section]
 }
 export function parseConfigDocuments(documents:Record<ConfigSection,string>){
-  const value:any={apiVersion:'northstar.dev/v1'}
+  const value:any={apiVersion:'perongen.dev/v1'}
   for(const section of configSections)value[section]=parseSectionDocument(section,documents[section])
   return configSchema.parse(value)
 }

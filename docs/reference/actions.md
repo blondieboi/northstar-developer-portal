@@ -5,7 +5,7 @@ An action maps a portal form to a GitHub Actions `workflow_dispatch` workflow.
 ## Complete example
 
 ```yaml
-apiVersion: northstar.dev/v1
+apiVersion: perongen.dev/v1
 actions:
   definitions:
     - id: create-service

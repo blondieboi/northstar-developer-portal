@@ -10,7 +10,7 @@ if(!output)throw new Error('Usage: npm run config:export -- --output <directory>
 
 const merge=(base:any,next:any):any=>Array.isArray(next)?next:next&&typeof next==='object'?Object.fromEntries(Array.from(new Set([...Object.keys(base||{}),...Object.keys(next)])).map(key=>[key,merge(base?.[key],next[key])])):next===undefined?base:next
 await migrate()
-const legacyPath=process.env.NORTHSTAR_CONFIG_PATH||'./northstar.yaml';let raw:any={}
+const legacyPath=process.env.PERONGEN_CONFIG_PATH||'./perongen.yaml';let raw:any={}
 if(existsSync(legacyPath))raw=YAML.parse(await readFile(legacyPath,'utf8'))||{}
 if(raw.scorecards?.rules&&!raw.scorecards.cards)raw.scorecards=validateSection('scorecards',raw.scorecards)
 if(raw.access?.bootstrapAdmins&&!raw.access.admins)raw.access={admins:raw.access.bootstrapAdmins}

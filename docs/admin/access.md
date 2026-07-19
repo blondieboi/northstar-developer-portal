@@ -7,7 +7,7 @@ GitHub identifies portal users. Perongen assigns each identity the `member` or `
 Add normal administrators to `access.yaml`:
 
 ```yaml
-apiVersion: northstar.dev/v1
+apiVersion: perongen.dev/v1
 access:
   admins:
     - platform-admin

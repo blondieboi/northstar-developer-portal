@@ -4,7 +4,7 @@ import { commitIntegrations, commitSection, ConfigConflictError, configDirectory
 
 const saved={...process.env}
 describe('Git configuration push routing',()=>{
-  beforeEach(()=>{resetGitConfigForTests();process.env.NORTHSTAR_CONFIG_REPOSITORY='acme/portal-config';process.env.NORTHSTAR_CONFIG_BRANCH='main';process.env.NORTHSTAR_CONFIG_DIRECTORY='environments/production';process.env.NORTHSTAR_CONFIG_INSTALLATION_ID='42';process.env.GITHUB_ADMIN_LOGINS='breakglass'})
+  beforeEach(()=>{resetGitConfigForTests();process.env.PERONGEN_CONFIG_REPOSITORY='acme/portal-config';process.env.PERONGEN_CONFIG_BRANCH='main';process.env.PERONGEN_CONFIG_DIRECTORY='environments/production';process.env.PERONGEN_CONFIG_INSTALLATION_ID='42';process.env.GITHUB_ADMIN_LOGINS='breakglass'})
   afterEach(()=>{resetGitConfigForTests();for(const key of Object.keys(process.env))if(!(key in saved))delete process.env[key];Object.assign(process.env,saved)})
   it('matches only the configured repository and branch',()=>{
     expect(configPushMatches({repository:{full_name:'acme/portal-config'},ref:'refs/heads/main'})).toBe(true)
@@ -20,7 +20,7 @@ describe('Git configuration push routing',()=>{
       if(route.includes('/git/ref/'))return{data:{object:{sha:head}}}
       const section=String(params.path).split('/').pop()!.replace('.yaml','') as ConfigSection
       const value=head==='recovered'&&section==='general'?{...defaults.general,name:'Recovered portal'}:defaults[section]
-      const raw=head==='bad'&&section==='general'?'apiVersion: northstar.dev/v1\ngeneral:\n  unexpected: true\n':serializeSection(section,value)
+      const raw=head==='bad'&&section==='general'?'apiVersion: perongen.dev/v1\ngeneral:\n  unexpected: true\n':serializeSection(section,value)
       return{data:{type:'file',sha:`${head}-${section}`,content:Buffer.from(raw).toString('base64')}}
     })
     setGitConfigOctokitFactoryForTests((async()=>({request})) as any)

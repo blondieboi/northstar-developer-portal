@@ -7,7 +7,7 @@ The software catalog is the authoritative list of successfully validated service
 Add a file at the configured service metadata path, `.portal/service.yaml` by default:
 
 ```yaml
-apiVersion: northstar.dev/v1
+apiVersion: perongen.dev/v1
 kind: Service
 metadata:
   name: checkout-api

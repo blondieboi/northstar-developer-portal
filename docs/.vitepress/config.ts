@@ -1,6 +1,6 @@
 import { defineConfig } from "vitepress";
 
-const repo = "https://github.com/blondieboi/northstar-developer-portal";
+const repo = "https://github.com/blondieboi/perongen-developer-portal";
 
 export default defineConfig({
   title: "Perongen",
@@ -8,11 +8,11 @@ export default defineConfig({
   description:
     "A self-hosted, GitHub-native developer portal for software ownership, standards, and reviewable guardrails.",
   lang: "en-US",
-  base: "/northstar-developer-portal/",
+  base: "/perongen-developer-portal/",
   cleanUrls: true,
   lastUpdated: true,
   sitemap: {
-    hostname: "https://blondieboi.github.io/northstar-developer-portal/",
+    hostname: "https://blondieboi.github.io/perongen-developer-portal/",
   },
   head: [
     ["meta", { name: "theme-color", content: "#21302c" }],

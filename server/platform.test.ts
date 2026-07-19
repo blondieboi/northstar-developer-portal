@@ -10,7 +10,7 @@ import {
 } from "./platform.js";
 
 const metadata = {
-  apiVersion: "northstar.dev/v1",
+  apiVersion: "perongen.dev/v1",
   kind: "Service",
   metadata: { name: "checkout", description: "Checkout service" },
   spec: {
