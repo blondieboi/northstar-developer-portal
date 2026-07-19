@@ -43,6 +43,7 @@ export default defineConfig({
     sidebar: [
       {
         text: "Start here",
+        collapsed: true,
         items: [
           { text: "What is Perongen?", link: "/overview" },
           { text: "Architecture & security", link: "/architecture-security" },
@@ -52,6 +53,7 @@ export default defineConfig({
       },
       {
         text: "User guides",
+        collapsed: true,
         items: [
           { text: "Services and catalog", link: "/guides/services" },
           { text: "Software map", link: "/guides/software-map" },
@@ -65,6 +67,7 @@ export default defineConfig({
       },
       {
         text: "Administration",
+        collapsed: true,
         items: [
           { text: "Deploy Perongen", link: "/admin/deployment" },
           { text: "Connect GitHub", link: "/admin/github" },
@@ -79,6 +82,7 @@ export default defineConfig({
       },
       {
         text: "Reference",
+        collapsed: true,
         items: [
           { text: "Portal configuration", link: "/reference/configuration" },
           { text: "Environment variables", link: "/reference/environment" },

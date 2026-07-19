@@ -30,7 +30,7 @@
   --vp-font-family-base: Manrope, system-ui, sans-serif;
   --vp-font-family-mono: 'DM Mono', ui-monospace, monospace;
   --vp-nav-height: 72px;
-  --vp-sidebar-width: 264px;
+  --vp-sidebar-width: 288px;
   --vp-layout-max-width: 1480px;
   --vp-sidebar-bg-color: var(--perongen-navy);
   --vp-code-block-bg: #1c2723;
@@ -79,15 +79,20 @@ a:focus-visible, button:focus-visible, input:focus-visible, summary:focus-visibl
 .VPNavBarSearch .DocSearch-Button, .VPNavBarSearch .VPLocalSearchBox button { border: 1px solid var(--perongen-line); border-radius: 8px; background: color-mix(in srgb, var(--perongen-paper) 82%, var(--perongen-soft)); }
 .VPNavScreen { background: var(--perongen-navy) !important; }
 
-.VPSidebar { background: var(--perongen-navy); color: #f2f4ef; border-right: 1px solid rgba(255,255,255,.05); }
-.VPSidebar .group + .group { border-top-color: rgba(255,255,255,.1); }
+.VPSidebar { background: var(--perongen-navy); color: #f2f4ef; border-right: 1px solid rgba(255,255,255,.05); scrollbar-color: rgba(201,154,89,.52) transparent; scrollbar-width: thin; }
+.VPSidebar::-webkit-scrollbar { width: 9px; }
+.VPSidebar::-webkit-scrollbar-track { background: transparent; }
+.VPSidebar::-webkit-scrollbar-thumb { border: 3px solid transparent; border-radius: 999px; background: rgba(201,154,89,.52); background-clip: padding-box; }
+.VPSidebar .group + .group { padding-top: 5px; border-top-color: rgba(255,255,255,.1); }
+.VPSidebarItem.level-0 > .item { min-height: 30px; align-items: center; }
 .VPSidebarItem.level-0 > .item > .text { color: #fff; font: 500 9px 'DM Mono'; letter-spacing: .12em; text-transform: uppercase; }
-.VPSidebarItem .link { min-height: 34px; color: #aeb8b1; border-radius: 5px; }
+.VPSidebarItem .link { min-height: 38px; margin: 2px -12px; padding: 0 12px; color: #aeb8b1; border-radius: 6px; }
 .VPSidebarItem .link:hover { background: rgba(255,255,255,.05); }
 .VPSidebarItem .link:hover .text { color: #fff; }
-.VPSidebarItem.is-active > .item .link { background: rgba(255,255,255,.08); box-shadow: inset 3px 0 var(--perongen-blue); }
+.VPSidebarItem.is-active > .item .link { background: rgba(255,255,255,.09); box-shadow: inset 3px 0 var(--perongen-blue); }
 .VPSidebarItem.is-active > .item .link > .text { color: #fff; font-weight: 600; }
 .VPSidebarItem.is-active > .item .indicator { display: none; }
+.VPSidebarItem.level-0 > .item[role='button']:focus-visible { outline: 2px solid var(--perongen-blue); outline-offset: 3px; }
 
 /* A calmer reading column using the portal's editorial hierarchy. */
 .VPDoc { padding-top: 54px; padding-bottom: 96px; }
