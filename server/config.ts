@@ -5,26 +5,27 @@ import { pluginById, pluginManifests, validatePluginSettings } from './plugins/r
 
 const slug=z.string().regex(/^[a-z0-9]+(?:-[a-z0-9]+)*$/,'Must be a lowercase slug')
 const riskLevel=z.enum(['unclassified','low','moderate','high','critical'])
+const webUrl=z.string().url().refine(value=>{try{const protocol=new URL(value).protocol;return protocol==='http:'||protocol==='https:'}catch{return false}},{message:'Only http and https URLs are allowed'})
 export const tierSchema=z.object({id:slug,title:z.string().min(1),description:z.string().default('')}).strict()
 export const serviceTypeSchema=z.object({id:slug,title:z.string().min(1),description:z.string().default('')}).strict()
 const ruleSourceSchema=z.discriminatedUnion('kind',[z.object({kind:z.literal('metadata')}).strict(),z.object({kind:z.literal('plugin'),plugin:slug}).strict()])
-const remediationSchema=z.object({guidance:z.string().min(1),docsUrl:z.string().url().optional(),suggestedValue:z.any().optional()}).strict()
+const remediationSchema=z.object({guidance:z.string().min(1),docsUrl:webUrl.optional(),suggestedValue:z.any().optional()}).strict()
 export const ruleSchema=z.object({id:z.string().min(1),title:z.string().min(1),description:z.string().default(''),path:z.string().min(1),operator:z.enum(['present','equals','oneOf','minLength','contains']),value:z.any().optional(),weight:z.number().positive().default(1),severity:z.enum(['required','recommended']).default('recommended'),enabled:z.boolean().default(true),tiers:z.array(slug).min(1).optional(),types:z.array(slug).min(1).optional(),maxEvidenceAgeHours:z.number().positive().max(8760).optional(),source:ruleSourceSchema.optional(),remediation:remediationSchema.optional()}).strict()
 export const scorecardSchema=z.object({id:slug,title:z.string().min(1),description:z.string().default(''),enabled:z.boolean().default(true),primary:z.boolean().default(false),risks:z.array(riskLevel).min(1).optional(),rules:z.array(ruleSchema)}).strict()
 const scorecardsSchema=z.preprocess(value=>{if(value&&typeof value==='object'&&Array.isArray((value as any).rules)&&!(value as any).cards)return{cards:[{id:'metadata-quality',title:'Metadata quality',description:'Catalog metadata completeness and standards.',enabled:true,primary:true,rules:(value as any).rules}]};return value},z.object({cards:z.array(scorecardSchema).min(1)}).strict())
 const configuredPluginSchema=z.object({id:slug,enabled:z.boolean().default(false),config:z.record(z.string(),z.unknown()).default({})}).strict()
 export const inputSchema=z.object({id:z.string().regex(/^[A-Za-z][A-Za-z0-9_-]*$/),label:z.string().min(1),type:z.enum(['text','multiline','number','boolean','select']),required:z.boolean().default(false),options:z.array(z.string()).optional(),placeholder:z.string().optional()}).strict().refine(x=>x.type!=='select'||Boolean(x.options?.length),{message:'Select inputs require options'})
 export const actionSchema=z.object({id:z.string().regex(/^[a-z0-9-]+$/),title:z.string().min(1),description:z.string().default(''),repository:z.string().regex(/^[^/\s]+\/[^/\s]+$/),workflow:z.string().min(1),confirmation:z.string().default('Run this action?'),enabled:z.boolean().default(true),published:z.boolean().default(false),inputs:z.array(inputSchema).default([]),version:z.number().int().positive().default(1)}).strict()
-export const toolDestinationSchema=z.object({label:z.string().min(1),url:z.string().url()}).strict()
-export const toolSchema=z.object({id:z.string().regex(/^[a-z0-9-]+$/),name:z.string().min(1),description:z.string().default(''),iconUrl:z.string().url().or(z.literal('')).default(''),destinations:z.array(toolDestinationSchema).min(1)}).strict()
+export const toolDestinationSchema=z.object({label:z.string().min(1),url:webUrl}).strict()
+export const toolSchema=z.object({id:z.string().regex(/^[a-z0-9-]+$/),name:z.string().min(1),description:z.string().default(''),iconUrl:webUrl.or(z.literal('')).default(''),destinations:z.array(toolDestinationSchema).min(1)}).strict()
 export const sectionSchemas={
-  general:z.object({name:z.string().min(1),logoUrl:z.string().url().or(z.literal('')),accentColor:z.string().regex(/^#[0-9a-fA-F]{6}$/),supportUrl:z.string().url().or(z.literal('')),documentationUrl:z.string().url().or(z.literal(''))}).strict(),
+  general:z.object({name:z.string().min(1),logoUrl:webUrl.or(z.literal('')),accentColor:z.string().regex(/^#[0-9a-fA-F]{6}$/),supportUrl:webUrl.or(z.literal('')),documentationUrl:webUrl.or(z.literal(''))}).strict(),
   catalog:z.object({serviceMetadataPath:z.string().min(1),teamMetadataPath:z.string().min(1),lifecycles:z.array(z.string().min(1)).min(1),tiers:z.array(tierSchema).default([]),types:z.array(serviceTypeSchema).default([]),installationId:z.number().int().positive().nullable()}).strict(),
   scorecards:scorecardsSchema,
   actions:z.object({definitions:z.array(actionSchema)}).strict(),
   tools:z.object({items:z.array(toolSchema)}).strict(),
   integrations:z.object({plugins:z.array(configuredPluginSchema).default([])}).strict(),
-  access:z.object({admins:z.array(z.string().min(1)).default([])}).strict()
+  access:z.object({admins:z.array(z.number().int().positive().max(Number.MAX_SAFE_INTEGER)).default([])}).strict()
 } as const
 const baseConfigSchema=z.object({apiVersion:z.literal('perongen.dev/v1'),general:sectionSchemas.general,catalog:sectionSchemas.catalog,scorecards:sectionSchemas.scorecards,actions:sectionSchemas.actions,tools:sectionSchemas.tools,integrations:sectionSchemas.integrations,access:sectionSchemas.access}).strict()
 const compatibleConfigSchema=z.preprocess(value=>value&&typeof value==='object'&&!('integrations' in value)?{...(value as Record<string,unknown>),integrations:{plugins:[]}}:value,baseConfigSchema)
@@ -104,9 +105,52 @@ export function parseConfigDocuments(documents:Record<ConfigSection,string>){
   for(const section of configSections)value[section]=parseSectionDocument(section,documents[section])
   return configSchema.parse(value)
 }
-export const getBreakGlassAdmins=()=>new Set((process.env.GITHUB_ADMIN_LOGINS||'').split(',').map(x=>x.trim().toLowerCase()).filter(Boolean))
-export const isAdminLogin=(login:string,config:PortalConfig=effective)=>getBreakGlassAdmins().has(login.toLowerCase())||config.access.admins.some(admin=>admin.toLowerCase()===login.toLowerCase())
-export function assertAdministratorConfigured(config:PortalConfig){if(!getBreakGlassAdmins().size&&!config.access.admins.length)throw new Error('access.yaml must configure at least one administrator when GITHUB_ADMIN_LOGINS is empty')}
+function parsePositiveIntegerList(value:string|undefined,name:string){
+  if(!value?.trim())return new Set<number>()
+  const parts=value.split(',')
+  if(parts.some(part=>!part.trim()))throw new Error(`${name} must not contain empty entries`)
+  const ids=parts.map(part=>Number(part.trim()))
+  if(ids.some(id=>!Number.isSafeInteger(id)||id<=0))throw new Error(`${name} must contain only positive GitHub user IDs`)
+  return new Set(ids)
+}
+
+export function getAllowedOrganizations(value=process.env.GITHUB_ALLOWED_ORGANIZATIONS){
+  if(!value?.trim())throw new Error('GITHUB_ALLOWED_ORGANIZATIONS is required')
+  const parts=value.split(',')
+  if(parts.some(part=>!part.trim()))throw new Error('GITHUB_ALLOWED_ORGANIZATIONS must not contain empty entries')
+  const organizations=parts.map(part=>part.trim().toLowerCase())
+  if(organizations.some(org=>!/^[a-z0-9](?:[a-z0-9-]{0,37}[a-z0-9])?$/.test(org)))throw new Error('GITHUB_ALLOWED_ORGANIZATIONS contains an invalid organization slug')
+  return new Set(organizations)
+}
+
+export function getTrustedProxyHops(value=process.env.TRUST_PROXY_HOPS){
+  if(value===undefined||value.trim()==='')return process.env.NODE_ENV==='production'?1:false
+  const hops=Number(value)
+  if(!Number.isSafeInteger(hops)||hops<0||hops>10)throw new Error('TRUST_PROXY_HOPS must be an integer from 0 to 10')
+  return hops===0?false:hops
+}
+
+export const getBreakGlassAdmins=()=>parsePositiveIntegerList(process.env.GITHUB_ADMIN_IDS,'GITHUB_ADMIN_IDS')
+export const isAdminGithubId=(githubId:number,config:PortalConfig=effective)=>getBreakGlassAdmins().has(githubId)||config.access.admins.includes(githubId)
+export function assertAdministratorConfigured(config:PortalConfig){if(!getBreakGlassAdmins().size&&!config.access.admins.length)throw new Error('access.yaml must configure at least one administrator when GITHUB_ADMIN_IDS is empty')}
+export function assertAuthenticationConfigured(){
+  getAllowedOrganizations()
+  if(process.env.NODE_ENV==='production'){
+    for(const name of ['DATABASE_URL','GITHUB_APP_ID','GITHUB_CLIENT_ID','GITHUB_CLIENT_SECRET','GITHUB_WEBHOOK_SECRET','PUBLIC_URL','APP_URL'] as const)if(!process.env[name]?.trim())throw new Error(`${name} is required in production`)
+    const appId=Number(process.env.GITHUB_APP_ID)
+    if(!Number.isSafeInteger(appId)||appId<=0)throw new Error('GITHUB_APP_ID must be a positive integer in production')
+    let databaseUrl:URL
+    try{databaseUrl=new URL(process.env.DATABASE_URL!)}catch{throw new Error('DATABASE_URL must be a valid PostgreSQL URL in production')}
+    if(!['postgres:','postgresql:'].includes(databaseUrl.protocol))throw new Error('DATABASE_URL must be a valid PostgreSQL URL in production')
+    if(!process.env.GITHUB_PRIVATE_KEY?.trim()&&!process.env.GITHUB_PRIVATE_KEY_PATH?.trim())throw new Error('GITHUB_PRIVATE_KEY or GITHUB_PRIVATE_KEY_PATH is required in production')
+    const installationId=Number(process.env.PERONGEN_CONFIG_INSTALLATION_ID)
+    if(!Number.isSafeInteger(installationId)||installationId<=0)throw new Error('PERONGEN_CONFIG_INSTALLATION_ID must be a positive integer in production')
+    let publicUrl:URL;let appUrl:URL
+    try{publicUrl=new URL(process.env.PUBLIC_URL!);appUrl=new URL(process.env.APP_URL!)}catch{throw new Error('PUBLIC_URL and APP_URL must be valid HTTPS URLs in production')}
+    if(publicUrl.protocol!=='https:'||appUrl.protocol!=='https:')throw new Error('PUBLIC_URL and APP_URL must use HTTPS in production')
+    if(publicUrl.origin!==appUrl.origin)throw new Error('APP_URL and PUBLIC_URL must have the same origin in production')
+  }
+}
 export { valueAt, evaluateRule }
 export function scoreWithConfig(metadata:any,plugins:Record<string,unknown>={},states:Record<string,any>={}){const primary=effective.scorecards.cards.find(card=>card.primary)!;return calculateScore(metadata,primary.rules,plugins,states)}
 export function scoresWithConfig(metadata:any,plugins:Record<string,unknown>={},states:Record<string,any>={}){return calculateScorecards(metadata,effective.scorecards.cards,plugins,states)}

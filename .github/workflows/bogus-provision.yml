@@ -12,8 +12,7 @@ on:
         required: true
         type: string
 
-permissions:
-  contents: read
+permissions: {}
 
 jobs:
   provision:
@@ -50,4 +49,3 @@ jobs:
             echo "| Owner | \`$SERVICE_OWNER\` |"
             echo "| Result | Simulation successful |"
           } >> "$GITHUB_STEP_SUMMARY"
-

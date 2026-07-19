@@ -4,7 +4,11 @@ import {
   collectGitHubActions,
   setGitHubActionsOctokitFactory,
 } from "./github-actions.js";
-import { pluginCatalogResponse, refreshServicePlugins } from "./runtime.js";
+import {
+  decorateServicesWithPlugins,
+  pluginCatalogResponse,
+  refreshServicePlugins,
+} from "./runtime.js";
 
 const service = {
   id: 1,
@@ -123,14 +127,34 @@ describe("GitHub Actions plugin", () => {
     expect(plugin).toMatchObject({
       id: "github-actions",
       enabled: true,
-      config: { lookbackDays: 7, maximumRuns: 5 },
       health: { status: "ready" },
     });
     expect(plugin).not.toHaveProperty("configSchema");
+    expect(plugin).not.toHaveProperty("config");
+    expect(plugin).not.toHaveProperty("defaults");
     expect(JSON.stringify(plugin)).not.toContain("private-value");
+    const [diagnostic] = await pluginCatalogResponse({
+      includeDiagnostics: true,
+    });
+    expect(diagnostic).toHaveProperty("config", {
+      lookbackDays: 7,
+      maximumRuns: 5,
+    });
     if (previousId === undefined) delete process.env.GITHUB_APP_ID;
     else process.env.GITHUB_APP_ID = previousId;
     if (previousKey === undefined) delete process.env.GITHUB_PRIVATE_KEY;
     else process.env.GITHUB_PRIVATE_KEY = previousKey;
+  });
+
+  it("decorates service reads without recalculating stored scores", async () => {
+    const [decorated] = await decorateServicesWithPlugins([
+      { ...service, score: 73, scorecards: { stored: 81 } },
+    ]);
+    expect(decorated).toMatchObject({
+      score: 73,
+      scorecards: { stored: 81 },
+      plugins: {},
+      pluginStates: {},
+    });
   });
 });

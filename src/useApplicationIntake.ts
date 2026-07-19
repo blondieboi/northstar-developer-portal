@@ -81,9 +81,11 @@ export function useApplicationIntake() {
     setScanError("");
     setResult(null);
     try {
-      const response = await fetch(
-        `/api/admin/intake${refresh ? "?refresh=1" : ""}`,
-      );
+      const response = await fetch("/api/admin/intake", {
+        method: "POST",
+        headers: { "content-type": "application/json" },
+        body: JSON.stringify({ refresh }),
+      });
       const body = (await jsonResponse(
         response,
         "Repository discovery failed",

@@ -12,6 +12,7 @@ import {
   X,
 } from "lucide-react";
 import type { ComponentType } from "react";
+import { safeExternalUrl } from "../safe-url";
 
 export type PublicPlugin = {
   id: string;
@@ -125,7 +126,7 @@ function GitHubActionsServicePanel({ data }: ServicePluginProps) {
           {data.runs?.length ? (
             <div className="workflow-runs">
               {data.runs.slice(0, 6).map((run: any) => (
-                <a href={run.url} target="_blank" rel="noopener" key={run.id}>
+                <a href={safeExternalUrl(run.url) || undefined} target="_blank" rel="noopener noreferrer" key={run.id}>
                   <span
                     className={`workflow-conclusion ${run.conclusion || run.status}`}
                   >
@@ -180,7 +181,7 @@ function PullRequestsPanel({ data }: ServicePluginProps) {
           {data.pullRequests?.length ? (
             <div className="plugin-ledger">
               {data.pullRequests.slice(0, 6).map((pr: any) => (
-                <a href={pr.url} target="_blank" rel="noopener" key={pr.number}>
+                <a href={safeExternalUrl(pr.url) || undefined} target="_blank" rel="noopener noreferrer" key={pr.number}>
                   <GitPullRequest size={16} />
                   <span>
                     <strong>
@@ -305,9 +306,9 @@ function DeploymentsPanel({ data }: ServicePluginProps) {
             <div className="plugin-ledger">
               {data.deployments.slice(0, 5).map((deployment: any) => (
                 <a
-                  href={deployment.url}
+                  href={safeExternalUrl(deployment.url) || undefined}
                   target="_blank"
-                  rel="noopener"
+                  rel="noopener noreferrer"
                   key={deployment.id}
                 >
                   <Rocket size={16} />
@@ -430,9 +431,9 @@ function MaintenancePanel({ data }: ServicePluginProps) {
             <div className="plugin-ledger">
               {data.issues.slice(0, 5).map((issue: any) => (
                 <a
-                  href={issue.url}
+                  href={safeExternalUrl(issue.url) || undefined}
                   target="_blank"
-                  rel="noopener"
+                  rel="noopener noreferrer"
                   key={issue.number}
                 >
                   <AlertTriangle size={16} />

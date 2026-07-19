@@ -64,6 +64,7 @@ import { StandardsChecks } from "./StandardsRemediation";
 import { LifecycleGuardrails } from "./LifecycleGuardrails";
 import { riskProfile } from "./governance";
 import { trackPortalEvent } from "./telemetry";
+import { safeExternalUrl, safeUiImageUrl } from "./safe-url";
 
 const VisualSettings = lazy(() =>
   import("./VisualSettings").then((module) => ({
@@ -112,8 +113,8 @@ type User = {
   avatarUrl?: string;
   email?: string;
   bio?: string;
-  role: string;
-  last_seen_at: string;
+  role?: string;
+  last_seen_at?: string;
   primary_team?: string | null;
   primaryTeam?: string | null;
   teams: { name: string; title: string }[];
@@ -152,7 +153,7 @@ type Service = {
   >;
   repository: string;
   metadata: Record<string, any>;
-  updated_at: string;
+  updated_at?: string;
 };
 type ActivityRow = {
   type: string;
@@ -161,7 +162,7 @@ type ActivityRow = {
   discovered: number;
   error?: string;
   results?: Array<{ repository?: string; status: string; error?: string }>;
-  created_at: string;
+  created_at?: string;
 };
 type ActionRun = {
   id: string;
@@ -169,8 +170,8 @@ type ActionRun = {
   repository: string;
   workflow: string;
   status: string;
-  inputs: Record<string, string>;
-  created_at: string;
+  inputs?: Record<string, string>;
+  created_at?: string;
 };
 type Summary = {
   services: Service[];
@@ -254,8 +255,10 @@ function initials(value: string) {
     .slice(0, 2)
     .toUpperCase();
 }
-function relative(value: string) {
-  const seconds = Math.max(0, (Date.now() - new Date(value).getTime()) / 1000);
+function relative(value?: string | null) {
+  const timestamp = value ? new Date(value).getTime() : Number.NaN;
+  if (!Number.isFinite(timestamp)) return "Recently";
+  const seconds = Math.max(0, (Date.now() - timestamp) / 1000);
   if (seconds < 60) return "Just now";
   if (seconds < 3600) return `${Math.floor(seconds / 60)}m ago`;
   if (seconds < 86400) return `${Math.floor(seconds / 3600)}h ago`;
@@ -268,37 +271,55 @@ function usePortal() {
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState("");
   const [revision, setRevision] = useState<string | null>(null);
-  const refresh = () => {
+  const refresh = async () => {
     setError("");
     const json = async (url: string) => {
       const response = await fetch(url);
       if (!response.ok) throw new Error(`${url} returned ${response.status}`);
       return response.json();
     };
-    return Promise.all([
-      json("/api/auth/me"),
-      json("/api/summary"),
-      json("/api/portal"),
-      json("/api/config/revision"),
-    ])
-      .then(([auth, summary, config, source]) => {
+    try {
+      const [auth, branding] = await Promise.all([
+        json("/api/auth/me"),
+        fetch("/api/public/branding")
+          .then((response) => (response.ok ? response.json() : null))
+          .catch(() => null),
+      ]);
+      const publicGeneral = branding?.general || branding;
+      if (publicGeneral && typeof publicGeneral === "object")
+        setPortal((current) => ({
+          ...current,
+          general: { ...current.general, ...publicGeneral },
+        }));
+      setUser(auth.user || null);
+      if (!auth.user) {
+        setData(empty);
+        setRevision(null);
+        setLoading(false);
+        return;
+      }
+      const [summary, config, source] = await Promise.all([
+        json("/api/summary"),
+        json("/api/portal"),
+        json("/api/config/revision"),
+      ]);
         setData(summary);
         setPortal(config);
         setUser(auth.user);
         setRevision(source.appliedSha || null);
         setLoading(false);
-      })
-      .catch((cause) => {
-        setError(
-          (cause as Error).message || "Perongen could not load portal data.",
-        );
-        setLoading(false);
-      });
+    } catch (cause) {
+      setError(
+        (cause as Error).message || "Perongen could not load portal data.",
+      );
+      setLoading(false);
+    }
   };
   useEffect(() => {
     refresh();
   }, []);
   useEffect(() => {
+    if (!user) return;
     const check = () =>
       fetch("/api/config/revision")
         .then((r) => r.json())
@@ -312,7 +333,7 @@ function usePortal() {
       clearInterval(timer);
       removeEventListener("focus", check);
     };
-  }, [revision]);
+  }, [revision, user?.id]);
   return { data, portal, user, loading, error, refresh };
 }
 function Logo({ name = "Perongen" }: { name?: string }) {
@@ -320,6 +341,100 @@ function Logo({ name = "Perongen" }: { name?: string }) {
     <div className="logo">
       <span>{name}</span>
     </div>
+  );
+}
+function LoginShell({ name, loading, error }: { name: string; loading: boolean; error: string }) {
+  const accessRoute = [
+    {
+      label: "GitHub identity",
+      detail: "Use the account you build with.",
+      Icon: CircleUserRound,
+    },
+    {
+      label: "Organization access",
+      detail: "Active membership is verified at sign-in.",
+      Icon: ShieldCheck,
+    },
+    {
+      label: "Engineering workspace",
+      detail: "Open the catalog, standards, and actions.",
+      Icon: Network,
+    },
+  ];
+  return (
+    <main className="login-shell" data-testid="login-shell">
+      <section className="login-brand-panel" aria-labelledby="login-thesis">
+        <header className="login-brand-header">
+          <Logo name={name} />
+          <span className="login-environment">
+            <i /> Organization workspace
+          </span>
+        </header>
+
+        <div className="login-thesis">
+          <p className="eyebrow">ENGINEERING CONTROL PLANE</p>
+          <h1 id="login-thesis">Know what you run. Know who owns it.</h1>
+          <p>
+            One calm view of repositories, service ownership, standards, and
+            the work needed to keep them healthy.
+          </p>
+        </div>
+
+        <div className="login-route" role="list" aria-label="Sign-in route">
+          {accessRoute.map(({ label, detail, Icon }, index) => (
+            <div className="login-route-step" role="listitem" key={label}>
+              <span className="login-route-node">
+                <Icon size={16} strokeWidth={1.7} />
+              </span>
+              <span>
+                <small>{String(index + 1).padStart(2, "0")}</small>
+                <strong>{label}</strong>
+                <em>{detail}</em>
+              </span>
+            </div>
+          ))}
+        </div>
+
+        <footer className="login-brand-footer">
+          Repository-native · Evidence-backed · Reviewable
+        </footer>
+      </section>
+
+      <section className="login-access-panel" aria-labelledby="login-heading">
+        <div className="login-access-copy">
+          <p className="eyebrow">MEMBER ACCESS</p>
+          <h2 id="login-heading">Continue to {name}</h2>
+          <p>
+            Sign in with GitHub to enter your organization’s engineering
+            workspace. No separate portal password is created.
+          </p>
+        </div>
+
+        {error && <div className="global-error login-error" role="alert">{error}</div>}
+
+        <button
+          className="primary-button login-submit"
+          data-testid="github-login"
+          disabled={loading}
+          onClick={() => location.assign("/api/auth/login")}
+        >
+          <CircleUserRound size={19} />
+          <span>{loading ? "Checking your session…" : "Sign in with GitHub"}</span>
+          {!loading && <ArrowRight size={17} />}
+        </button>
+
+        <div className="login-assurance">
+          <ShieldCheck size={17} />
+          <p>
+            <strong>Organization-verified access</strong>
+            <span>
+              Membership is checked with GitHub and your session expires after
+              eight hours.
+            </span>
+          </p>
+        </div>
+      </section>
+    </main>
   );
 }
 function DeferredSurface({ children }: { children: React.ReactNode }) {
@@ -388,7 +503,7 @@ function EmptyState({
         (documentationUrl && (
           <a
             className="empty-doc-link"
-            href={documentationUrl}
+            href={safeExternalUrl(documentationUrl) || undefined}
             target="_blank"
             rel="noopener noreferrer"
           >
@@ -683,7 +798,7 @@ function Header({
         {documentationUrl && (
           <a
             className="docs-link"
-            href={documentationUrl}
+            href={safeExternalUrl(documentationUrl) || undefined}
             target="_blank"
             rel="noopener noreferrer"
           >
@@ -1070,9 +1185,9 @@ function Catalog({
                     "Validate .portal/service.yaml against the service metadata contract."}
                 </code>
                 <a
-                  href={`https://github.com/${item.repository}/blob/main/.portal/service.yaml`}
+                  href={safeExternalUrl(`https://github.com/${item.repository}/blob/main/.portal/service.yaml`) || undefined}
                   target="_blank"
-                  rel="noopener"
+                  rel="noopener noreferrer"
                 >
                   Open metadata <ExternalLink size={13} />
                 </a>
@@ -1263,7 +1378,7 @@ function ServiceDrawer({
         <h4>Source</h4>
         <a
           className="repo-link"
-          href={`https://github.com/${service.repository}`}
+          href={safeExternalUrl(`https://github.com/${service.repository}`) || undefined}
           target="_blank"
           rel="noreferrer"
         >
@@ -1608,9 +1723,9 @@ function ServiceWorkspace({
                 <p className="eyebrow">SOURCE</p>
                 <a
                   className="service-source"
-                  href={`https://github.com/${service.repository}`}
+                  href={safeExternalUrl(`https://github.com/${service.repository}`) || undefined}
                   target="_blank"
-                  rel="noopener"
+                  rel="noopener noreferrer"
                 >
                   <GitBranch size={16} />
                   <span>
@@ -1632,9 +1747,9 @@ function ServiceWorkspace({
                 <div className="service-links">
                   {links.map((link: any) => (
                     <a
-                      href={link.url}
+                      href={safeExternalUrl(link.url) || undefined}
                       target="_blank"
-                      rel="noopener"
+                      rel="noopener noreferrer"
                       key={`${link.name}-${link.url}`}
                     >
                       <span>
@@ -1785,9 +1900,9 @@ function TeamWorkspace({
             <div className="team-links">
               {team.links.map((link) => (
                 <a
-                  href={link.url}
+                  href={safeExternalUrl(link.url) || undefined}
                   target="_blank"
-                  rel="noopener"
+                  rel="noopener noreferrer"
                   key={`${link.name}-${link.url}`}
                 >
                   <span>
@@ -1823,7 +1938,7 @@ function TeamWorkspace({
               {team.members.map((member) => (
                 <div key={member.login}>
                   {member.avatarUrl ? (
-                    <img src={member.avatarUrl} alt="" />
+                    <img src={safeUiImageUrl(member.avatarUrl) || undefined} alt="" />
                   ) : (
                     <span>{initials(member.name)}</span>
                   )}
@@ -1936,7 +2051,7 @@ function TeamsPage({
               </div>
               <div className="member-stack">
                 {t.members.map((m) => (
-                  <img key={m.login} src={m.avatarUrl} alt={m.name} />
+                  <img key={m.login} src={safeUiImageUrl(m.avatarUrl) || undefined} alt={m.name} />
                 ))}
                 {!t.members.length && (
                   <button onClick={() => navigate("people")}>
@@ -1991,12 +2106,12 @@ function PeoplePage({ users }: { users: User[] }) {
         <div className="people-list">
           {filtered.map((u) => (
             <article className="person-row" key={u.login}>
-              <img src={u.avatar_url} alt="" />
+              <img src={safeUiImageUrl(u.avatar_url) || undefined} alt="" />
               <div>
                 <strong>{u.name}</strong>
                 <span>@{u.login}</span>
               </div>
-              <p>{u.bio || "No GitHub bio provided."}</p>
+              <p>GitHub organization member</p>
               <div className="person-teams">
                 {u.teams.length ? (
                   u.teams.map((t) => <span key={t.name}>{t.title}</span>)
@@ -2004,9 +2119,6 @@ function PeoplePage({ users }: { users: User[] }) {
                   <span>Unassigned</span>
                 )}
               </div>
-              <small>
-                {u.role} · seen {relative(u.last_seen_at)}
-              </small>
             </article>
           ))}
         </div>
@@ -2043,8 +2155,8 @@ function ToolsPage({ tools }: { tools: Tool[] }) {
                 {String(index + 1).padStart(2, "0")}
               </div>
               <div className="tool-identity">
-                {tool.iconUrl ? (
-                  <img className="tool-icon" src={tool.iconUrl} alt="" />
+                {safeUiImageUrl(tool.iconUrl) ? (
+                  <img className="tool-icon" src={safeUiImageUrl(tool.iconUrl)!} alt="" />
                 ) : (
                   <div className="tool-monogram">{initials(tool.name)}</div>
                 )}
@@ -2056,9 +2168,9 @@ function ToolsPage({ tools }: { tools: Tool[] }) {
               <div className="tool-destinations">
                 {tool.destinations.map((destination) => (
                   <a
-                    href={destination.url}
+                    href={safeExternalUrl(destination.url) || undefined}
                     target="_blank"
-                    rel="noopener"
+                    rel="noopener noreferrer"
                     key={`${tool.id}-${destination.label}`}
                   >
                     <span>{destination.label}</span>
@@ -2141,7 +2253,7 @@ function Actions({ runs }: { runs: ActionRun[] }) {
               </span>
               <span>
                 <ShieldCheck size={15} />
-                Admin only
+                Verified organization members
               </span>
             </div>
             <button className="primary" onClick={() => setFormOpen(true)}>
@@ -2538,6 +2650,7 @@ export function App() {
     );
   }, [portal.general.name, portal.general.accentColor]);
   useEffect(() => {
+    if (!user) return;
     trackPortalEvent("page.view", {
       path: location.pathname,
       entityKind:
@@ -2549,7 +2662,7 @@ export function App() {
             ? selectedTeam?.name
             : view,
     });
-  }, [view, selectedService?.name, selectedTeam?.name]);
+  }, [user?.id, view, selectedService?.name, selectedTeam?.name]);
   useEffect(() => {
     if (!memberTeams.length) return;
     if (
@@ -2562,6 +2675,9 @@ export function App() {
           : memberTeams[0].name,
       );
   }, [memberTeams.map((team) => team.name).join(","), primaryTeam]);
+  if (!user) {
+    return <LoginShell name={portal.general.name} loading={loading} error={error} />;
+  }
   return (
     <div className={`app ${collapsed ? "sidebar-collapsed" : ""}`}>
       <Sidebar

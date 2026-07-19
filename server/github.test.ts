@@ -62,6 +62,16 @@ describe("service metadata", () => {
         spec: { ...complete.spec, owner: "" },
       }),
     ).toThrow());
+  it("rejects non-web link protocols", () =>
+    expect(() =>
+      metadataSchema.parse({
+        ...complete,
+        spec: {
+          ...complete.spec,
+          links: [{ name: "Unsafe", url: "javascript:alert(1)" }],
+        },
+      }),
+    ).toThrow("http and https"));
   it("accepts lifecycle strings for runtime configuration validation", () =>
     expect(
       metadataSchema.parse({

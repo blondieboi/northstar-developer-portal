@@ -8,6 +8,7 @@ import {
   X,
 } from "lucide-react";
 import { evidenceFreshness, evaluateRule, type ScorecardRule } from "./scorecards";
+import { safeExternalUrl } from "./safe-url";
 
 type Waiver = {
   id: string;
@@ -103,7 +104,8 @@ export function StandardsChecks({
       setMessage("The repository already contains the suggested value");
     else {
       setMessage(`Pull request #${data.pullRequest.number} opened`);
-      window.open(data.pullRequest.url, "_blank", "noopener");
+      const pullRequestUrl = safeExternalUrl(data.pullRequest.url);
+      if (pullRequestUrl) window.open(pullRequestUrl, "_blank", "noopener,noreferrer");
       void refresh();
     }
   };
@@ -174,9 +176,9 @@ export function StandardsChecks({
                   <FileWarning size={13} /> {check.remediation.guidance}
                   {check.remediation.docsUrl && (
                     <a
-                      href={check.remediation.docsUrl}
+                      href={safeExternalUrl(check.remediation.docsUrl) || undefined}
                       target="_blank"
-                      rel="noopener"
+                      rel="noopener noreferrer"
                     >
                       Guidance <ExternalLink size={11} />
                     </a>
@@ -194,9 +196,9 @@ export function StandardsChecks({
               {latestRemediation && (
                 <a
                   className={`remediation-history ${latestRemediation.status}`}
-                  href={latestRemediation.pr_url}
+                  href={safeExternalUrl(latestRemediation.pr_url) || undefined}
                   target="_blank"
-                  rel="noopener"
+                  rel="noopener noreferrer"
                 >
                   <GitPullRequest size={12} /> PR #{latestRemediation.pr_number} ·{" "}
                   {latestRemediation.status === "pr-open"

@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest'
-import { activateConfig, assertAdministratorConfigured, configSections, defaults, evaluateRule, isAdminLogin, missingPluginScorecards, parseConfigDocuments, serializeSection, scoreWithConfig, validateConfig, validateSection } from './config.js'
+import { activateConfig, assertAdministratorConfigured, assertAuthenticationConfigured, configSections, defaults, evaluateRule, getAllowedOrganizations, getTrustedProxyHops, isAdminGithubId, missingPluginScorecards, parseConfigDocuments, serializeSection, scoreWithConfig, validateConfig, validateSection } from './config.js'
 
 describe('portal configuration',()=>{
   it('validates editable sections',()=>expect(validateSection('general',defaults.general)).toEqual(defaults.general))
@@ -93,15 +93,50 @@ describe('portal configuration',()=>{
   })
   it('serializes sections deterministically',()=>expect(serializeSection('tools',defaults.tools)).toBe(serializeSection('tools',defaults.tools)))
   it('resolves Git and break-glass administrators without an open-admin fallback',()=>{
-    const previous=process.env.GITHUB_ADMIN_LOGINS;process.env.GITHUB_ADMIN_LOGINS='breakglass'
-    expect(isAdminLogin('BREAKGLASS',defaults)).toBe(true)
-    expect(isAdminLogin('member',defaults)).toBe(false)
-    if(previous===undefined)delete process.env.GITHUB_ADMIN_LOGINS;else process.env.GITHUB_ADMIN_LOGINS=previous
+    const previous=process.env.GITHUB_ADMIN_IDS;process.env.GITHUB_ADMIN_IDS='42'
+    expect(isAdminGithubId(42,defaults)).toBe(true)
+    expect(isAdminGithubId(43,defaults)).toBe(false)
+    if(previous===undefined)delete process.env.GITHUB_ADMIN_IDS;else process.env.GITHUB_ADMIN_IDS=previous
   })
   it('requires at least one configured administrator',()=>{
-    const previous=process.env.GITHUB_ADMIN_LOGINS;delete process.env.GITHUB_ADMIN_LOGINS
+    const previous=process.env.GITHUB_ADMIN_IDS;delete process.env.GITHUB_ADMIN_IDS
     expect(()=>assertAdministratorConfigured(defaults)).toThrow('at least one administrator')
-    expect(()=>assertAdministratorConfigured({...defaults,access:{admins:['octocat']}})).not.toThrow()
-    if(previous!==undefined)process.env.GITHUB_ADMIN_LOGINS=previous
+    expect(()=>assertAdministratorConfigured({...defaults,access:{admins:[42]}})).not.toThrow()
+    if(previous!==undefined)process.env.GITHUB_ADMIN_IDS=previous
+  })
+  it('parses one or many allowed organizations case-insensitively and rejects empty entries',()=>{
+    expect([...getAllowedOrganizations('Acme,Platform-Partners')]).toEqual(['acme','platform-partners'])
+    expect(()=>getAllowedOrganizations('')).toThrow('required')
+    expect(()=>getAllowedOrganizations('acme,,partners')).toThrow('empty entries')
+  })
+  it('uses one trusted proxy hop in production and validates explicit overrides',()=>{
+    const previousNodeEnv=process.env.NODE_ENV
+    process.env.NODE_ENV='production'
+    expect(getTrustedProxyHops()).toBe(1)
+    expect(getTrustedProxyHops('2')).toBe(2)
+    expect(getTrustedProxyHops('0')).toBe(false)
+    expect(()=>getTrustedProxyHops('-1')).toThrow('integer from 0 to 10')
+    if(previousNodeEnv===undefined)delete process.env.NODE_ENV;else process.env.NODE_ENV=previousNodeEnv
+  })
+  it('requires numeric immutable administrator IDs',()=>{
+    expect(validateSection('access',{admins:[42,900719]})).toEqual({admins:[42,900719]})
+    expect(()=>validateSection('access',{admins:['octocat']})).toThrow()
+    const previous=process.env.GITHUB_ADMIN_IDS;process.env.GITHUB_ADMIN_IDS='42,,43'
+    expect(()=>isAdminGithubId(42,defaults)).toThrow('empty entries')
+    if(previous===undefined)delete process.env.GITHUB_ADMIN_IDS;else process.env.GITHUB_ADMIN_IDS=previous
+  })
+  it('rejects non-web URL protocols',()=>{
+    expect(()=>validateSection('tools',{items:[{id:'bad',name:'Bad',destinations:[{label:'Open',url:'javascript:alert(1)'}]}]})).toThrow('http and https')
+  })
+  it('validates the complete production authentication environment',()=>{
+    const names=['NODE_ENV','DATABASE_URL','GITHUB_APP_ID','GITHUB_CLIENT_ID','GITHUB_CLIENT_SECRET','GITHUB_WEBHOOK_SECRET','GITHUB_PRIVATE_KEY','GITHUB_PRIVATE_KEY_PATH','GITHUB_ALLOWED_ORGANIZATIONS','PERONGEN_CONFIG_INSTALLATION_ID','PUBLIC_URL','APP_URL'] as const
+    const previous=Object.fromEntries(names.map(name=>[name,process.env[name]]))
+    Object.assign(process.env,{NODE_ENV:'production',DATABASE_URL:'postgres://localhost/perongen',GITHUB_APP_ID:'1',GITHUB_CLIENT_ID:'client',GITHUB_CLIENT_SECRET:'secret',GITHUB_WEBHOOK_SECRET:'webhook',GITHUB_PRIVATE_KEY:'key',GITHUB_ALLOWED_ORGANIZATIONS:'acme,partners',PERONGEN_CONFIG_INSTALLATION_ID:'42',PUBLIC_URL:'https://portal.example.com',APP_URL:'https://portal.example.com/app'})
+    expect(()=>assertAuthenticationConfigured()).not.toThrow()
+    process.env.APP_URL='https://other.example.com'
+    expect(()=>assertAuthenticationConfigured()).toThrow('same origin')
+    process.env.APP_URL='http://portal.example.com'
+    expect(()=>assertAuthenticationConfigured()).toThrow('HTTPS')
+    for(const name of names){const value=previous[name];if(value===undefined)delete process.env[name];else process.env[name]=value}
   })
 })

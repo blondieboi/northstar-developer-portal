@@ -13,7 +13,6 @@ import {
 import { evaluateRule, ruleApplies, scorecardApplies } from "./scorecards";
 import { PageIntro } from "./ui/PageIntro";
 
-const rel = (value: string) => new Date(value).toLocaleString();
 const ring = (score: number) => (
   <div
     className="score-ring"
@@ -328,15 +327,17 @@ export function ConfiguredActions({
       )}
       <section className="panel run-history">
         <h3>Recent runs</h3>
-        {runs.map((r) => (
-          <div className="run-row" key={r.id}>
+        {runs.map((r, index) => (
+          <div
+            className="run-row"
+            key={`${r.action_id}-${r.repository}-${r.workflow}-${index}`}
+          >
             <CheckCircle2 size={18} />
             <div>
               <strong>{r.action_id}</strong>
               <small>{r.repository}</small>
             </div>
             <span>{r.status}</span>
-            <time>{rel(r.created_at)}</time>
           </div>
         ))}
       </section>

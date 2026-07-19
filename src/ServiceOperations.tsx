@@ -11,6 +11,7 @@ import {
   ShieldAlert,
   WalletCards,
 } from "lucide-react";
+import { safeExternalUrl } from "./safe-url";
 
 type Snapshot = {
   onCall?: string | null;
@@ -141,7 +142,7 @@ export function ServiceOperations({ serviceName }: { serviceName: string }) {
       <div className="cockpit-links">
         {links.map(([url, label, Icon]) =>
           url ? (
-            <a href={url} target="_blank" rel="noopener" key={label}>
+            <a href={safeExternalUrl(url) || undefined} target="_blank" rel="noopener noreferrer" key={label}>
               <Icon size={15} /> {label} <ExternalLink size={12} />
             </a>
           ) : (
@@ -157,9 +158,9 @@ export function ServiceOperations({ serviceName }: { serviceName: string }) {
           <div className="environment-list">
             {[...environments.values()].map((deployment) => (
               <a
-                href={deployment.url}
+                href={safeExternalUrl(deployment.url) || undefined}
                 target="_blank"
-                rel="noopener"
+                rel="noopener noreferrer"
                 key={deployment.environment}
               >
                 <span className={`environment-state ${deployment.state}`} />
@@ -181,9 +182,9 @@ export function ServiceOperations({ serviceName }: { serviceName: string }) {
           <div className="operations-timeline">
             {snapshot.timeline.slice(0, 10).map((event, index) => (
               <a
-                href={event.url || "#"}
-                target={event.url ? "_blank" : undefined}
-                rel="noopener"
+                href={safeExternalUrl(event.url) || undefined}
+                target={safeExternalUrl(event.url) ? "_blank" : undefined}
+                rel="noopener noreferrer"
                 key={`${event.type}-${event.occurredAt}-${index}`}
               >
                 <i />

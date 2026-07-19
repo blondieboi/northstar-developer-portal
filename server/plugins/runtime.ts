@@ -47,7 +47,10 @@ export function enabledPluginSettings() {
     }));
 }
 
-async function pluginBundleForService(serviceName: string) {
+async function pluginBundleForService(
+  serviceName: string,
+  options: { includeErrors?: boolean } = {},
+) {
   const enabled = new Set(
     enabledPluginSettings().map((item) => item.plugin.id),
   );
@@ -64,7 +67,7 @@ async function pluginBundleForService(serviceName: string) {
         row.plugin_id,
         {
           status: row.status,
-          error: row.error,
+          ...(options.includeErrors ? { error: row.error } : {}),
           observedAt: row.observed_at,
           expiresAt: row.expires_at,
         },
@@ -80,7 +83,9 @@ export async function pluginFactsForService(serviceName: string) {
 export async function recalculateServiceScorecards(
   service: Record<string, any>,
 ) {
-  const bundle = await pluginBundleForService(service.name);
+  const bundle = await pluginBundleForService(service.name, {
+    includeErrors: true,
+  });
   const scorecards = scoresWithConfig(service.metadata, bundle.facts, bundle.states);
   const score = scoreWithConfig(service.metadata, bundle.facts, bundle.states);
   await updateServiceScores(service.id, score, scorecards);
@@ -138,14 +143,20 @@ export async function decorateServicesWithPlugins(
   services: Array<Record<string, any>>,
 ) {
   return Promise.all(
-    services.map(async (service) => ({
-      ...service,
-      ...(await recalculateServiceScorecards(service)),
-    })),
+    services.map(async (service) => {
+      const bundle = await pluginBundleForService(service.name);
+      return {
+        ...service,
+        plugins: bundle.facts,
+        pluginStates: bundle.states,
+      };
+    }),
   );
 }
 
-export async function pluginCatalogResponse() {
+export async function pluginCatalogResponse(options: {
+  includeDiagnostics?: boolean;
+} = {}) {
   const configured = new Map(
     getConfig().integrations.plugins.map((plugin) => [plugin.id, plugin]),
   );
@@ -169,6 +180,7 @@ export async function pluginCatalogResponse() {
       });
   }
   return publicPluginCatalog().map((plugin) => {
+    const { defaults: _defaults, ...publicPlugin } = plugin;
     const settings = configured.get(plugin.id);
     const latest = health.get(plugin.id) as any;
     const environmentReady = Boolean(
@@ -179,9 +191,11 @@ export async function pluginCatalogResponse() {
       latest?.expires_at && new Date(latest.expires_at).getTime() < Date.now(),
     );
     return {
-      ...plugin,
+      ...publicPlugin,
       enabled: Boolean(settings?.enabled),
-      config: { ...plugin.defaults, ...settings?.config },
+      ...(options.includeDiagnostics
+        ? { config: { ...plugin.defaults, ...settings?.config } }
+        : {}),
       health: !settings?.enabled
         ? { status: "disabled", message: "Plugin is disabled" }
         : !environmentReady
@@ -192,7 +206,10 @@ export async function pluginCatalogResponse() {
           : latest?.status === "degraded"
             ? {
                 status: "degraded",
-                message: latest.error || "Latest refresh failed",
+                message:
+                  options.includeDiagnostics && latest.error
+                    ? latest.error
+                    : "Latest refresh failed",
                 observedAt: latest.observed_at,
               }
             : expired

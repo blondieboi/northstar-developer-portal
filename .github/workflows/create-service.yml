@@ -12,8 +12,7 @@ on:
         required: true
         type: string
 
-permissions:
-  contents: write
+permissions: {}
 
 jobs:
   validate:
@@ -27,4 +26,3 @@ jobs:
           [[ "$SERVICE_NAME" =~ ^[a-z0-9]+(-[a-z0-9]+)*$ ]] || { echo "Service name must be kebab-case"; exit 1; }
           [[ "$SERVICE_OWNER" =~ ^team:[a-z0-9]+(-[a-z0-9]+)*$ ]] || { echo "Owner must use team:name format"; exit 1; }
           echo "Validated $SERVICE_NAME for $SERVICE_OWNER"
-

@@ -31,20 +31,20 @@ Perongen reads its canonical non-secret configuration from seven validated YAML 
 
 Administrators edit configuration through **Settings** without writing YAML. Each draft is validated and previews the YAML files and line counts that will change. Saves use optimistic blob-SHA conflict protection, and related multi-file updates are committed atomically. Valid external commits are applied through Push webhooks; a 60-second server poll recovers missed deliveries, and open browsers check the applied revision every 15 seconds. PostgreSQL stores the last-known-good revision so reads remain available during GitHub outages, while writes are disabled until synchronization recovers.
 
-The control plane manages portal identity, catalog ingestion, named weighted scorecards, built-in integration plugins, published GitHub workflow actions, user roles, provider health, and audit history. Application Intake finds installed repositories that are not yet catalogued, derives evidence-backed metadata suggestions, requires confirmation of risk facts, and opens the repository-owned onboarding file as a pull request. Database credentials, OAuth secrets, GitHub private keys, session secrets, and webhook secrets remain deployment-only and are never returned by the API.
+The control plane manages portal identity, catalog ingestion, named weighted scorecards, built-in integration plugins, published GitHub workflow actions, user roles, provider health, and audit history. Application Intake finds installed repositories that are not yet catalogued, derives evidence-backed metadata suggestions, requires confirmation of risk facts, and opens the repository-owned onboarding file as a pull request. Database credentials, OAuth secrets, GitHub private keys, session tokens, and webhook secrets are never returned by the API.
 
 Scorecards, plugins, and workflow actions use visual builders. GitHub push and workflow-run deliveries are HMAC-verified and trigger configuration, metadata, or plugin-data synchronization. Delivery outcomes appear under **Settings → Integrations**.
 
 ## Self-hosted setup
 
-1. Start PostgreSQL with `docker compose up -d postgres` (port `5440` by default).
+1. Start the development-only PostgreSQL service with `POSTGRES_PASSWORD='choose-a-non-default-local-password' docker compose --profile development up -d postgres` (loopback port `5440` by default).
 2. Copy `.env.example` to `.env` and configure `DATABASE_URL`.
 3. Create a GitHub App and add its App ID and private key to `.env`.
-4. Grant repository **Contents: read and write**, **Pull requests: read and write**, and **Actions: write** permissions, then install the App on both the configuration and catalog repositories.
+4. Grant repository **Contents: read and write**, **Pull requests: read and write**, and **Actions: write** permissions, plus organization **Members: read**. If a personal account owns the App, use **Advanced → Make public** so organizations can install it; this does not list it in GitHub Marketplace. Install the App on every allowed organization and on both the configuration and catalog repositories.
 5. Set the GitHub App's **User authorization callback URL** (or an OAuth App's **Authorization callback URL**) to `${PUBLIC_URL}/api/auth/callback` exactly. For the default local setup, this is `http://localhost:4000/api/auth/callback`.
 6. Set the webhook URL to `${PUBLIC_URL}/api/github/webhook`, provide the same secret in `GITHUB_WEBHOOK_SECRET`, and subscribe to **Push**, **Pull request**, and **Workflow run** events. Pull-request events keep campaign and scorecard-remediation status current.
-7. Commit all seven files from `config.example/` to the configured directory. At least one administrator must be listed in `access.yaml` or `GITHUB_ADMIN_LOGINS`.
-8. Add a strong `SESSION_SECRET`; use `GITHUB_ADMIN_LOGINS` only for deployment break-glass administrators.
+7. Set `GITHUB_ALLOWED_ORGANIZATIONS` to one or more comma-separated GitHub organization slugs. Active membership in any listed organization grants sign-in.
+8. Commit all seven files from `config.example/` to the configured directory. List administrators by numeric GitHub ID in `access.yaml`, and reserve `GITHUB_ADMIN_IDS` for deployment break-glass access.
 9. Install the app and sign in. The first-run flight path verifies the Git revision and guides the first catalog synchronization.
 
 For local development, leave `PUBLIC_URL=http://localhost:4000` for the API callback and set `APP_URL=http://localhost:5173` for the Vite UI. In a production deployment where the UI and API share an origin, set both to that public origin.

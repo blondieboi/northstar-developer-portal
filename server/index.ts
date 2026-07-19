@@ -12,6 +12,7 @@ import {
   decideWaiver,
   findServiceByName,
   graphRows,
+  isUserTeamMember,
   listAuditEvents,
   listMetadataCampaigns,
   listServiceDocuments,
@@ -34,7 +35,6 @@ import {
   updateCampaignStatus,
   updateCampaignTarget,
   updateRemediationFromPullRequest,
-  upsertUser,
   webhookSeen,
 } from "./db.js";
 import {
@@ -52,9 +52,11 @@ import {
 } from "./auth.js";
 import {
   defaults,
+  assertAuthenticationConfigured,
   getBreakGlassAdmins,
   getConfig,
-  isAdminLogin,
+  getTrustedProxyHops,
+  isAdminGithubId,
   type ConfigSection,
 } from "./config.js";
 import {
@@ -101,8 +103,127 @@ import {
 } from "./intake.js";
 import type { IntakeDraft } from "../src/intake-contract.js";
 import { isOnboardingComplete } from "../src/onboarding-contract.js";
+import {
+  browserSecurityHeaders,
+  canMutateOwnedService,
+  InMemoryRateLimiter,
+  publicActionRunDto,
+  publicApiRoutes,
+  publicDocumentDto,
+  publicRemediationDto,
+  publicScoreHistoryDto,
+  publicWaiverDto,
+  requestOriginAllowed,
+  unsafeMethods,
+  webhookInstallationScope,
+} from "./security.js";
 
-const server = Fastify({ logger: true });
+const server = Fastify({ logger: true, trustProxy: getTrustedProxyHops() });
+const rateLimiter = new InMemoryRateLimiter();
+
+const configuredAppOrigin = () => {
+  const value =
+    process.env.APP_URL ||
+    process.env.PUBLIC_URL ||
+    (process.env.NODE_ENV === "production"
+      ? ""
+      : "http://localhost:5173");
+  try {
+    return new URL(value).origin;
+  } catch {
+    throw new Error("APP_URL must be an absolute URL");
+  }
+};
+
+function applyRateLimit(
+  request: any,
+  reply: any,
+  bucket: string,
+  maximum: number,
+  windowMs: number,
+) {
+  const retryAfter = rateLimiter.consume({
+    bucket,
+    ip: request.ip,
+    userId: request.portalUser?.id,
+    maximum,
+    windowMs,
+  });
+  if (!retryAfter) return false;
+  reply.header(
+    "retry-after",
+    String(retryAfter),
+  );
+  reply.code(429).send({ error: "Too many requests" });
+  return true;
+}
+const requireSensitiveOperationRateLimit = (request: any, reply: any) => {
+  if (applyRateLimit(request, reply, "sensitive-operation", 5, 5 * 60_000))
+    return reply;
+};
+
+const serviceDto = (service: Record<string, any>) => ({
+  name: service.name,
+  description: service.description,
+  owner: service.owner,
+  system: service.system,
+  lifecycle: service.lifecycle,
+  tier: service.tier,
+  service_type: service.service_type,
+  language: service.language,
+  repository: service.repository,
+  metadata: service.metadata,
+  score: service.score,
+  scorecards: service.scorecards,
+  plugins: service.plugins || {},
+  pluginStates: service.pluginStates || {},
+});
+const teamDto = (team: Record<string, any>) => ({
+  name: team.name,
+  title: team.title,
+  description: team.description,
+  links: team.links || [],
+  member_count: team.member_count,
+  service_count: team.service_count,
+  members: (team.members || []).map((member: Record<string, any>) => ({
+    login: member.login,
+    name: member.name,
+    avatarUrl: member.avatarUrl,
+  })),
+});
+const userDto = (user: Record<string, any>) => ({
+  login: user.login,
+  name: user.name,
+  avatar_url: user.avatar_url,
+  primary_team: user.primary_team,
+  teams: (user.teams || []).map((team: Record<string, any>) => ({
+    name: team.name,
+    title: team.title,
+  })),
+});
+const activityDto = (activity: Record<string, any>) => ({
+  type: activity.type,
+  status: activity.status,
+  registered: activity.registered,
+  discovered: activity.discovered,
+});
+async function requireServiceOwnerOrAdmin(
+  request: any,
+  reply: any,
+  service: Record<string, any>,
+) {
+  const user = request.portalUser || (await currentUser(request));
+  if (
+    await canMutateOwnedService(user, service.owner, isUserTeamMember)
+  )
+    return true;
+  reply.code(403).send({
+    error: "Service ownership or administrator access is required",
+  });
+  return false;
+}
+
+assertAuthenticationConfigured();
 async function reconcileCampaignStatus(id: string | number) {
   const [campaign] = await listMetadataCampaigns(id);
   const targets = campaign?.targets || [];
@@ -120,7 +241,60 @@ const validCampaignPath = (path: unknown) =>
   !path
     .split(".")
     .some((part) => ["__proto__", "prototype", "constructor"].includes(part));
-await server.register(cors, { origin: true });
+if (process.env.NODE_ENV !== "production") {
+  const developmentOrigin = configuredAppOrigin();
+  await server.register(cors, {
+    credentials: true,
+    origin: (origin, callback) =>
+      callback(null, !origin || origin === developmentOrigin),
+  });
+}
+server.addHook("onRequest", async (request, reply) => {
+  reply.headers(browserSecurityHeaders(process.env.NODE_ENV === "production"));
+  if (request.method === "OPTIONS") return;
+
+  const routePath = request.routeOptions.url || request.url.split("?", 1)[0];
+  if (
+    request.url.startsWith("/api/") &&
+    !["/api/health", "/api/public/branding"].includes(routePath)
+  )
+    reply.header("cache-control", "no-store");
+  if (
+    !requestOriginAllowed({
+      method: request.method,
+      routePath,
+      origin: request.headers.origin,
+      expectedOrigin: configuredAppOrigin(),
+    })
+  )
+    return reply.code(403).send({ error: "Request origin is not allowed" });
+
+  if (!request.url.startsWith("/api/")) return;
+  if (
+    ["/api/auth/login", "/api/auth/callback"].includes(routePath) &&
+    applyRateLimit(request, reply, "authentication", 10, 15 * 60_000)
+  )
+    return;
+  if (
+    routePath === "/api/auth/me" &&
+    applyRateLimit(request, reply, "current-session", 60, 60_000)
+  )
+    return;
+  if (!publicApiRoutes.has(routePath)) {
+    const user = await currentUser(request);
+    if (!user)
+      return reply
+        .code(401)
+        .send({ error: "Sign in with GitHub to continue" });
+    (request as any).portalUser = user;
+  }
+  if (
+    unsafeMethods.has(request.method) &&
+    routePath !== "/api/github/webhook" &&
+    applyRateLimit(request, reply, "mutation", 60, 60_000)
+  )
+    return;
+});
 server.removeContentTypeParser("application/json");
 server.addContentTypeParser(
   "application/json",
@@ -157,18 +331,23 @@ queueMicrotask(() => {
 
 server.get("/api/health", async () => ({
   status: getConfigSource().status === "ready" ? "ok" : "degraded",
-  database: Boolean(process.env.DATABASE_URL),
-  github: Boolean(process.env.GITHUB_APP_ID),
-  configuration: getConfigSource(),
 }));
+server.get("/api/public/branding", async () => {
+  const { name, logoUrl, accentColor, documentationUrl } = getConfig().general;
+  return { name, logoUrl, accentColor, documentationUrl };
+});
 server.get("/api/services", async () => ({
-  services: await decorateServicesWithPlugins((await listServices()) || []),
+  services: (
+    await decorateServicesWithPlugins((await listServices()) || [])
+  ).map(serviceDto),
 }));
 server.get("/api/graph", async () => buildGraph(await graphRows()));
 server.get<{ Querystring: { service?: string } }>(
   "/api/documents",
   async (request) => ({
-    documents: await listServiceDocuments(request.query.service),
+    documents: (await listServiceDocuments(request.query.service)).map(
+      (document) => publicDocumentDto(document),
+    ),
   }),
 );
 server.get<{ Params: { serviceName: string } }>(
@@ -182,14 +361,24 @@ server.get<{ Params: { serviceName: string } }>(
 );
 server.get<{ Querystring: { service?: string } }>(
   "/api/standards/waivers",
-  async (request) => ({ waivers: await listWaivers(request.query.service) }),
+  async (request, reply) => {
+    if (!request.query.service?.trim())
+      return reply.code(400).send({ error: "Service is required" });
+    return {
+      waivers: (await listWaivers(request.query.service)).map(publicWaiverDto),
+    };
+  },
 );
 server.get<{ Params: { serviceName: string } }>(
   "/api/services/:serviceName/remediations",
   async (request, reply) => {
     const service = await findServiceByName(request.params.serviceName);
     if (!service) return reply.code(404).send({ error: "Service not found" });
-    return { remediations: await listScorecardRemediations(service.name) };
+    return {
+      remediations: (await listScorecardRemediations(service.name)).map(
+        publicRemediationDto,
+      ),
+    };
   },
 );
 server.post<{
@@ -197,12 +386,13 @@ server.post<{
   Body: { action: "extend" | "promote" | "archive"; expiresAt?: string };
 }>(
   "/api/services/:serviceName/lifecycle-actions",
-  { preHandler: requireUser },
+  { preHandler: [requireUser, requireSensitiveOperationRateLimit] },
   async (request, reply) => {
     if (!["extend", "promote", "archive"].includes(request.body?.action))
       return reply.code(400).send({ error: "Lifecycle action is invalid" });
     const service = await findServiceByName(request.params.serviceName);
     if (!service) return reply.code(404).send({ error: "Service not found" });
+    if (!(await requireServiceOwnerOrAdmin(request, reply, service))) return;
     if (!service.installation_id)
       return reply.code(400).send({ error: "Service GitHub installation is unavailable" });
     try {
@@ -285,6 +475,7 @@ server.post<{
   async (request, reply) => {
     const service = await findServiceByName(request.body?.serviceName);
     if (!service) return reply.code(404).send({ error: "Service not found" });
+    if (!(await requireServiceOwnerOrAdmin(request, reply, service))) return;
     if (!request.body.reason?.trim())
       return reply.code(400).send({ error: "A waiver reason is required" });
     const expiry = new Date(request.body.expiresAt);
@@ -316,10 +507,11 @@ server.post<{
   Body: { scorecardId: string; ruleId: string };
 }>(
   "/api/services/:serviceName/remediations",
-  { preHandler: requireUser },
+  { preHandler: [requireUser, requireSensitiveOperationRateLimit] },
   async (request, reply) => {
     const service = await findServiceByName(request.params.serviceName);
     if (!service) return reply.code(404).send({ error: "Service not found" });
+    if (!(await requireServiceOwnerOrAdmin(request, reply, service))) return;
     const card = getConfig().scorecards.cards.find(
       (candidate) => candidate.id === request.body?.scorecardId,
     );
@@ -392,32 +584,72 @@ server.post<{
     properties?: Record<string, unknown>;
   };
 }>("/api/events", async (request, reply) => {
-  if (!request.body?.eventType || request.body.eventType.length > 80)
-    return reply.code(400).send({ error: "Event type is required" });
-  const user = await currentUser(request);
+  const body = request.body;
+  const raw = (body as any)?.__raw as Buffer | undefined;
+  if (!raw || raw.byteLength > 2_048)
+    return reply.code(400).send({ error: "Event payload is too large" });
+  if (!body || !["page.view", "search.empty"].includes(body.eventType))
+    return reply.code(400).send({ error: "Event type is invalid" });
+  if (
+    body.path !== undefined &&
+    (typeof body.path !== "string" ||
+      body.path.length > 256 ||
+      !body.path.startsWith("/") ||
+      /[\u0000-\u001f]/.test(body.path))
+  )
+    return reply.code(400).send({ error: "Event path is invalid" });
+  if (
+    body.entityKind !== undefined &&
+    !["page", "service", "team"].includes(body.entityKind)
+  )
+    return reply.code(400).send({ error: "Event entity kind is invalid" });
+  if (
+    body.entityKey !== undefined &&
+    (typeof body.entityKey !== "string" || body.entityKey.length > 200)
+  )
+    return reply.code(400).send({ error: "Event entity key is invalid" });
+  if (applyRateLimit(request, reply, "telemetry", 30, 60_000)) return;
+  const user = (request as any).portalUser || (await currentUser(request));
+  const query =
+    body.eventType === "search.empty" &&
+    typeof body.properties?.query === "string"
+      ? body.properties.query.slice(0, 120)
+      : "";
   await recordPortalEvent({
-    eventType: request.body.eventType,
-    actorLogin: user?.login,
-    path: request.body.path,
-    entityKind: request.body.entityKind,
-    entityKey: request.body.entityKey,
-    properties: request.body.properties || {},
+    eventType: body.eventType,
+    actorLogin: user!.login,
+    path: body.path,
+    entityKind: body.entityKind,
+    entityKey: body.entityKey,
+    properties:
+      body.eventType === "search.empty" ? { queryLength: query.length } : {},
   });
   return reply.code(202).send({ status: "recorded" });
 });
 server.get<{ Params: { serviceName: string } }>(
   "/api/services/:serviceName/score-history",
   async (request) => ({
-    history: await listServiceScoreHistory(request.params.serviceName),
+    history: (await listServiceScoreHistory(request.params.serviceName)).map(
+      publicScoreHistoryDto,
+    ),
   }),
 );
-server.get("/api/teams", async () => ({ teams: await listTeams() }));
-server.get("/api/users", async () => ({ users: await listUsers() }));
+server.get("/api/teams", async () => ({
+  teams: (await listTeams()).map(teamDto),
+}));
+server.get("/api/users", async () => ({
+  users: (await listUsers()).map(userDto),
+}));
 server.get("/api/summary", async () => {
   const summary = await catalogSummary();
   return {
-    ...summary,
-    services: await decorateServicesWithPlugins(summary.services || []),
+    services: (
+      await decorateServicesWithPlugins(summary.services || [])
+    ).map(serviceDto),
+    teams: (summary.teams || []).map(teamDto),
+    users: (summary.users || []).map(userDto),
+    activity: (summary.activity || []).map(activityDto),
+    actions: (summary.actions || []).map(publicActionRunDto),
   };
 });
 server.get("/api/portal", async () => ({
@@ -445,34 +677,36 @@ server.get<{ Params: { serviceName: string } }>(
 );
 server.post(
   "/api/admin/plugins/refresh",
-  { preHandler: requireAdmin },
+  { preHandler: [requireAdmin, requireSensitiveOperationRateLimit] },
   async () => {
     await refreshAllServicePlugins();
     return { status: "refreshed" };
   },
 );
-server.get("/api/github/status", async () => ({
-  configured: Boolean(
-    process.env.GITHUB_APP_ID &&
-    (process.env.GITHUB_PRIVATE_KEY || process.env.GITHUB_PRIVATE_KEY_PATH),
-  ),
-  oauth: Boolean(
-    process.env.GITHUB_CLIENT_ID && process.env.GITHUB_CLIENT_SECRET,
-  ),
-  database: Boolean(process.env.DATABASE_URL),
-  appId: process.env.GITHUB_APP_ID || null,
-  configuration: getConfigSource(),
-}));
+server.get(
+  "/api/github/status",
+  { preHandler: requireAdmin },
+  async () => ({
+    configured: Boolean(
+      process.env.GITHUB_APP_ID &&
+      (process.env.GITHUB_PRIVATE_KEY || process.env.GITHUB_PRIVATE_KEY_PATH),
+    ),
+    oauth: Boolean(
+      process.env.GITHUB_CLIENT_ID && process.env.GITHUB_CLIENT_SECRET,
+    ),
+    database: Boolean(process.env.DATABASE_URL),
+    appId: process.env.GITHUB_APP_ID || null,
+    configuration: getConfigSource(),
+  }),
+);
 server.get("/api/config/revision", async () => {
   const source = getConfigSource();
   return {
     appliedSha: source.appliedSha,
     status: source.status,
-    error: source.error,
-    syncedAt: source.syncedAt,
   };
 });
-server.get("/api/onboarding", async () => {
+server.get("/api/onboarding", { preHandler: requireAdmin }, async () => {
   const stats = await onboardingStats();
   const cfg = getConfig();
   const configSource = getConfigSource();
@@ -539,19 +773,12 @@ server.get<{ Querystring: { code?: string; state?: string } }>(
   "/api/auth/callback",
   finishLogin,
 );
-server.get("/api/auth/me", async (request) => {
-  const user = await currentUser(request);
-  if (user)
-    await upsertUser({
-      githubId: user.id,
-      login: user.login,
-      name: user.name,
-      avatarUrl: user.avatarUrl,
-      role: user.role,
-    });
-  return { user };
-});
-server.post("/api/auth/logout", async (_request, reply) => logout(reply));
+server.get("/api/auth/me", async (request) => ({
+  user: await currentUser(request),
+}));
+server.post("/api/auth/logout", async (request, reply) =>
+  logout(request, reply),
+);
 server.put<{ Body: { team: string } }>(
   "/api/me/primary-team",
   { preHandler: requireUser },
@@ -568,7 +795,7 @@ server.put<{ Body: { team: string } }>(
 );
 server.post<{ Body?: { installationId?: number } }>(
   "/api/github/sync",
-  { preHandler: requireAdmin },
+  { preHandler: [requireAdmin, requireSensitiveOperationRateLimit] },
   async (request, reply) => {
     const installationId = Number(
       request.body?.installationId ||
@@ -589,9 +816,9 @@ server.post<{ Body?: { installationId?: number } }>(
     };
   },
 );
-server.get<{ Querystring: { refresh?: string } }>(
+server.post<{ Body?: { refresh?: boolean } }>(
   "/api/admin/intake",
-  { preHandler: requireAdmin },
+  { preHandler: [requireAdmin, requireSensitiveOperationRateLimit] },
   async (request, reply) => {
     const installationId = Number(
       getConfig().catalog.installationId || process.env.GITHUB_INSTALLATION_ID,
@@ -603,7 +830,7 @@ server.get<{ Querystring: { refresh?: string } }>(
       const discovery = await discoverIntakeCandidates(
         installationId,
         (services || []).map((service: any) => service.repository),
-        { refresh: request.query.refresh === "1" },
+        { refresh: request.body?.refresh === true },
       );
       return {
         ...discovery,
@@ -634,7 +861,7 @@ server.post<{ Body: { draft: IntakeDraft } }>(
 );
 server.post<{ Body: { repository: string; draft: IntakeDraft } }>(
   "/api/admin/intake/onboard",
-  { preHandler: requireAdmin },
+  { preHandler: [requireAdmin, requireSensitiveOperationRateLimit] },
   async (request, reply) => {
     const installationId = Number(
       getConfig().catalog.installationId || process.env.GITHUB_INSTALLATION_ID,
@@ -665,7 +892,7 @@ server.post<{ Body: { repository: string; draft: IntakeDraft } }>(
 );
 server.post<{ Body: { actionId: string; inputs?: Record<string, string> } }>(
   "/api/actions/dispatch",
-  { preHandler: requireUser },
+  { preHandler: [requireUser, requireSensitiveOperationRateLimit] },
   async (request, reply) => {
     const action = getConfig().actions.definitions.find(
       (a) => a.id === request.body?.actionId && a.enabled && a.published,
@@ -673,6 +900,18 @@ server.post<{ Body: { actionId: string; inputs?: Record<string, string> } }>(
     if (!action)
       return reply.code(404).send({ error: "Published action not found" });
     const inputs = request.body?.inputs || {};
+    if (typeof inputs !== "object" || Array.isArray(inputs))
+      return reply.code(400).send({ error: "Action inputs are invalid" });
+    const inputDefinitions = new Set(action.inputs.map((input) => input.id));
+    if (Object.keys(inputs).some((key) => !inputDefinitions.has(key)))
+      return reply.code(400).send({ error: "Action inputs contain an unknown field" });
+    if (
+      Object.values(inputs).some(
+        (value) => typeof value !== "string" || value.length > 4_000,
+      ) ||
+      JSON.stringify(inputs).length > 16_000
+    )
+      return reply.code(400).send({ error: "Action inputs are too large" });
     for (const input of action.inputs) {
       const value = inputs[input.id];
       if (input.required && (value === undefined || value === ""))
@@ -750,7 +989,7 @@ server.get("/api/admin/config", { preHandler: requireAdmin }, async () =>
 );
 server.post(
   "/api/admin/config/refresh",
-  { preHandler: requireAdmin },
+  { preHandler: [requireAdmin, requireSensitiveOperationRateLimit] },
   async (request, reply) => {
     try {
       const user = await currentUser(request);
@@ -828,45 +1067,51 @@ server.delete<{
 server.get("/api/admin/users", { preHandler: requireAdmin }, async () => ({
   users: (await listUsers()).map((user) => ({
     ...user,
-    role: isAdminLogin(user.login) ? "admin" : "member",
-    breakGlass: getBreakGlassAdmins().has(user.login.toLowerCase()),
+    role: isAdminGithubId(Number(user.github_id)) ? "admin" : "member",
+    breakGlass: getBreakGlassAdmins().has(Number(user.github_id)),
   })),
 }));
 server.patch<{
-  Params: { login: string };
+  Params: { githubId: string };
   Body: { role: "admin" | "member"; expectedBlobSha: string };
 }>(
-  "/api/admin/users/:login",
+  "/api/admin/users/:githubId",
   { preHandler: requireAdmin },
   async (request, reply) => {
     if (!["admin", "member"].includes(request.body?.role))
       return reply.code(400).send({ error: "Role must be admin or member" });
+    const githubId = Number(request.params.githubId);
+    if (!Number.isSafeInteger(githubId) || githubId <= 0)
+      return reply.code(400).send({ error: "GitHub user ID is invalid" });
     if (
       request.body.role === "member" &&
-      getBreakGlassAdmins().has(request.params.login.toLowerCase())
+      getBreakGlassAdmins().has(githubId)
     )
       return reply.code(400).send({
         error: "Deployment break-glass administrators cannot be demoted",
       });
     try {
       const user = await currentUser(request);
-      const admins = new Set(
-        getConfig().access.admins.map((x) => x.toLowerCase()),
-      );
+      const candidates = await listUsers();
+      if (!candidates.some((candidate) => Number(candidate.github_id) === githubId))
+        return reply.code(404).send({ error: "User not found" });
+      const admins = new Set(getConfig().access.admins);
       if (request.body.role === "admin")
-        admins.add(request.params.login.toLowerCase());
-      else admins.delete(request.params.login.toLowerCase());
+        admins.add(githubId);
+      else admins.delete(githubId);
       await commitSection(
         "access",
-        { admins: [...admins].sort() },
+        { admins: [...admins].sort((a, b) => a - b) },
         request.body.expectedBlobSha,
         { login: user!.login, id: user!.id, name: user!.name },
       );
       return {
         users: (await listUsers()).map((candidate) => ({
           ...candidate,
-          role: isAdminLogin(candidate.login) ? "admin" : "member",
-          breakGlass: getBreakGlassAdmins().has(candidate.login.toLowerCase()),
+          role: isAdminGithubId(Number(candidate.github_id))
+            ? "admin"
+            : "member",
+          breakGlass: getBreakGlassAdmins().has(Number(candidate.github_id)),
         })),
         source: getConfigSource(),
       };
@@ -973,7 +1218,7 @@ server.post<{
 );
 server.post<{ Params: { id: string }; Body: { limit?: number } }>(
   "/api/admin/campaigns/:id/launch",
-  { preHandler: requireAdmin },
+  { preHandler: [requireAdmin, requireSensitiveOperationRateLimit] },
   async (request, reply) => {
     const [campaign] = await listMetadataCampaigns(request.params.id);
     if (!campaign) return reply.code(404).send({ error: "Campaign not found" });
@@ -1093,10 +1338,32 @@ server.post("/api/github/webhook", async (request, reply) => {
   const body = request.body as any;
   const repository = body.repository?.full_name;
   const installationId = Number(body.installation?.id) || undefined;
+  const installationScope = webhookInstallationScope({
+    installationId,
+    catalogInstallationIds: [
+      getConfig().catalog.installationId,
+      Number(process.env.GITHUB_INSTALLATION_ID),
+    ],
+    configurationInstallationId: Number(
+      process.env.PERONGEN_CONFIG_INSTALLATION_ID,
+    ),
+  });
+  if (!installationScope.allowed) {
+    request.log.warn(
+      { deliveryId, event, installationId },
+      "Ignoring webhook from an unconfigured GitHub installation",
+    );
+    return reply.code(202).send({ status: "ignored" });
+  }
   if (await webhookSeen(deliveryId))
     return reply.code(202).send({ status: "duplicate" });
   try {
-    if (event === "pull_request" && repository && body.pull_request?.number) {
+    if (
+      installationScope.catalog &&
+      event === "pull_request" &&
+      repository &&
+      body.pull_request?.number
+    ) {
       const campaignId = await updateCampaignFromPullRequest({
         repository,
         prNumber: Number(body.pull_request.number),
@@ -1137,6 +1404,7 @@ server.post("/api/github/webhook", async (request, reply) => {
     }
     if (
       event === "push" &&
+      installationScope.configuration &&
       configPushMatches(body) &&
       configDirectoryChanged(body)
     ) {
@@ -1152,7 +1420,12 @@ server.post("/api/github/webhook", async (request, reply) => {
       });
       return reply.code(202).send({ status: "applied" });
     }
-    if (event === "push" && repository && installationId) {
+    if (
+      installationScope.catalog &&
+      event === "push" &&
+      repository &&
+      installationId
+    ) {
       const paths = [
         getConfig().catalog.serviceMetadataPath,
         getConfig().catalog.teamMetadataPath,
@@ -1179,7 +1452,10 @@ server.post("/api/github/webhook", async (request, reply) => {
         return reply.code(202).send({ status: result.status });
       }
     }
-    if (pluginRefreshRequested(event, repository)) {
+    if (
+      installationScope.catalog &&
+      pluginRefreshRequested(event, repository)
+    ) {
       await refreshRepositoryPlugins(repository);
       await recordWebhook({
         deliveryId,

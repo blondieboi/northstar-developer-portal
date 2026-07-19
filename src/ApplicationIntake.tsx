@@ -18,6 +18,7 @@ import {
   useApplicationIntake,
   type IntakeEvidence as Evidence,
 } from "./useApplicationIntake";
+import { safeExternalUrl } from "./safe-url";
 
 function EvidenceNote({ item }: { item?: Evidence }) {
   if (!item) return null;
@@ -92,7 +93,7 @@ export function ApplicationIntake() {
             <section className="intake-dossier">
               <header className="intake-dossier-head">
                 <div><p className="eyebrow">EVIDENCE DOSSIER</p><h2>{candidate.repository}</h2><span>{candidate.readiness}% of fields supported before review</span></div>
-                <a href={candidate.url} target="_blank" rel="noopener">Open repository <ExternalLink size={12} /></a>
+                <a href={safeExternalUrl(candidate.url) || undefined} target="_blank" rel="noopener noreferrer">Open repository <ExternalLink size={12} /></a>
               </header>
               {candidate.scanError && <div className="intake-scan-warning"><AlertTriangle size={14} /><span><strong>Some repository evidence could not be read.</strong>{candidate.scanError}</span></div>}
 
@@ -154,7 +155,7 @@ export function ApplicationIntake() {
               <footer className="intake-commit-bar">
                 <div>
                   {missing.length ? <span className="error" role="status"><AlertTriangle size={14} />Review required: {missing.join(", ")}</span> : proposalError ? <span className="error" role="alert"><AlertTriangle size={14} />{proposalError}</span> : <span><Check size={14} />No repository changes occur until you open the pull request.</span>}
-                  {result?.url && <a href={result.url} target="_blank" rel="noopener">Pull request #{result.number} opened <ExternalLink size={12} /></a>}
+                  {result?.url && safeExternalUrl(result.url) && <a href={safeExternalUrl(result.url)!} target="_blank" rel="noopener noreferrer">Pull request #{result.number} opened <ExternalLink size={12} /></a>}
                   {result?.alreadyCataloged && <span>Metadata already exists. Scan again to refresh the queue.</span>}
                 </div>
                 <button className="primary-button" disabled={!yaml || previewing || working || Boolean(result)} onClick={onboard}>{working ? <><LoaderCircle className="spin" size={14} /> Opening pull request…</> : <><GitPullRequest size={14} /> Open onboarding pull request</>}</button>

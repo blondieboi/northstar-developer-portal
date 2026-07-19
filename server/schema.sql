@@ -70,6 +70,29 @@ create table if not exists users (
   created_at timestamptz not null default now()
 );
 alter table users add column if not exists primary_team text;
+alter table users alter column github_id set not null;
+create unique index if not exists users_login_case_insensitive on users(lower(login));
+
+create table if not exists sessions (
+  id bigserial primary key,
+  token_hash text not null unique,
+  user_id bigint not null references users(id) on delete cascade,
+  matched_organizations text[] not null default '{}',
+  created_at timestamptz not null default now(),
+  expires_at timestamptz not null,
+  revoked_at timestamptz
+);
+create index if not exists sessions_user_active on sessions(user_id, expires_at) where revoked_at is null;
+create index if not exists sessions_expiry on sessions(expires_at);
+create index if not exists sessions_revoked on sessions(revoked_at) where revoked_at is not null;
+
+create table if not exists oauth_states (
+  state_hash text primary key,
+  created_at timestamptz not null default now(),
+  expires_at timestamptz not null,
+  consumed_at timestamptz
+);
+create index if not exists oauth_states_expiry on oauth_states(expires_at);
 
 create table if not exists team_members (
   team_id bigint not null references teams(id) on delete cascade,

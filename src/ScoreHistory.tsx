@@ -22,7 +22,7 @@ export function ScoreHistory({
         .concat(
           history.length
             ? []
-            : [{ score: currentScore, recorded_at: new Date().toISOString() }],
+            : [{ score: currentScore }],
         ),
     [history, currentScore],
   );
@@ -73,7 +73,7 @@ export function ScoreHistory({
           <polyline points={polyline} />
           {points.map((point, index) => (
             <circle
-              key={`${point.recorded_at}-${index}`}
+              key={`${point.score}-${index}`}
               cx={
                 points.length === 1 ? 50 : (index / (points.length - 1)) * 100
               }

@@ -15,6 +15,7 @@ import {
   Users,
   X,
 } from "lucide-react";
+import { safeExternalUrl } from "./safe-url";
 
 const jsonValue = (value: string) => {
   try {
@@ -248,7 +249,7 @@ export function CampaignsPage({
               </code>
               <span className="confidence-chip">{target.confidence}</span>
               {target.pr_url ? (
-                <a href={target.pr_url} target="_blank" rel="noopener">
+                <a href={safeExternalUrl(target.pr_url) || undefined} target="_blank" rel="noopener noreferrer">
                   PR #{target.pr_number} <ExternalLink size={12} />
                 </a>
               ) : target.error ? (

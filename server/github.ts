@@ -12,7 +12,7 @@ import {
 } from "./db.js";
 import {
   getConfig,
-  isAdminLogin,
+  isAdminGithubId,
   scoreWithConfig,
   scoresWithConfig,
 } from "./config.js";
@@ -28,6 +28,11 @@ const metadataDate = z
     const parsed = new Date(`${value}T00:00:00Z`);
     return Number.isFinite(parsed.getTime()) && parsed.toISOString().slice(0, 10) === value;
   }, "Date is invalid");
+
+const webUrl = z.string().url().refine((value) => {
+  const protocol = new URL(value).protocol;
+  return protocol === "http:" || protocol === "https:";
+}, "Only http and https URLs are allowed");
 
 export const metadataSchema = z.object({
   apiVersion: z.string(),
@@ -59,7 +64,7 @@ export const metadataSchema = z.object({
       .strict()
       .optional(),
     links: z
-      .array(z.object({ name: z.string(), url: z.string().url() }))
+      .array(z.object({ name: z.string(), url: webUrl }))
       .optional(),
     dependsOn: z.array(z.string().min(1)).optional(),
     providesApis: z.array(z.string().min(1)).optional(),
@@ -70,7 +75,7 @@ export const metadataSchema = z.object({
           name: z.string().min(1),
           type: z.string().min(1),
           relation: z.string().min(1).default("uses"),
-          url: z.string().url().optional(),
+          url: webUrl.optional(),
         }),
       )
       .optional(),
@@ -78,10 +83,10 @@ export const metadataSchema = z.object({
     operational: z
       .object({
         onCall: z.string().optional(),
-        runbookUrl: z.string().url().optional(),
-        dashboardUrl: z.string().url().optional(),
-        sloUrl: z.string().url().optional(),
-        costUrl: z.string().url().optional(),
+        runbookUrl: webUrl.optional(),
+        dashboardUrl: webUrl.optional(),
+        sloUrl: webUrl.optional(),
+        costUrl: webUrl.optional(),
       })
       .optional(),
   }),
@@ -98,7 +103,7 @@ export const teamSchema = z.object({
   spec: z.object({
     members: z.array(z.string().min(1)).default([]),
     links: z
-      .array(z.object({ name: z.string().min(1), url: z.string().url() }))
+      .array(z.object({ name: z.string().min(1), url: webUrl }))
       .default([]),
   }),
 });
@@ -243,7 +248,7 @@ export async function syncInstallation(installationId: number) {
             avatarUrl: profile.avatar_url,
             email: profile.email,
             bio: profile.bio,
-            role: isAdminLogin(profile.login) ? "admin" : "member",
+            role: isAdminGithubId(profile.id) ? "admin" : "member",
           })) as { id?: string };
           if (user?.id) userIds.push(user.id);
         }
@@ -351,7 +356,7 @@ export async function syncRepository(
           avatarUrl: profile.avatar_url,
           email: profile.email,
           bio: profile.bio,
-          role: isAdminLogin(profile.login) ? "admin" : "member",
+          role: isAdminGithubId(profile.id) ? "admin" : "member",
         })) as { id?: string };
         if (user?.id) ids.push(user.id);
       }

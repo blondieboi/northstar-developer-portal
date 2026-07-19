@@ -1,5 +1,6 @@
 import { useEffect, useMemo, useState } from "react";
 import ReactMarkdown from "react-markdown";
+import { safeMarkdownUrl } from "./safe-url";
 import {
   AlertTriangle,
   ArrowLeft,
@@ -11,25 +12,31 @@ import {
 } from "lucide-react";
 
 type Document = {
-  id: string;
   path: string;
   title: string;
   content: string;
-  sha?: string;
-  source_updated_at?: string | null;
-  fetched_at: string;
+  source_age_days?: number | null;
   service_name: string;
   repository: string;
   owner: string;
 };
 
-function ageDays(value?: string | null) {
-  if (!value) return null;
-  return Math.floor((Date.now() - new Date(value).getTime()) / 86400000);
-}
+const markdownComponents = {
+  a: ({ href, children, ...props }: React.ComponentProps<"a">) => {
+    const safeHref = safeMarkdownUrl(href || "");
+    return safeHref ? (
+      <a {...props} href={safeHref} target="_blank" rel="noopener noreferrer">
+        {children}
+      </a>
+    ) : (
+      <span>{children}</span>
+    );
+  },
+  img: () => null,
+};
 
 function Freshness({ document }: { document: Document }) {
-  const age = ageDays(document.source_updated_at);
+  const age = document.source_age_days ?? null;
   const stale = age !== null && age >= 180;
   return (
     <span className={stale ? "docs-freshness stale" : "docs-freshness"}>
@@ -73,7 +80,7 @@ export function DocumentationHub({
     documents.map((document) => document.service_name),
   ).size;
   const staleCount = documents.filter(
-    (document) => (ageDays(document.source_updated_at) || 0) >= 180,
+    (document) => (document.source_age_days || 0) >= 180,
   ).length;
   if (selected)
     return (
@@ -92,7 +99,12 @@ export function DocumentationHub({
               </div>
             </header>
             <div className="markdown-body">
-              <ReactMarkdown>{selected.content}</ReactMarkdown>
+              <ReactMarkdown
+                components={markdownComponents}
+                urlTransform={safeMarkdownUrl}
+              >
+                {selected.content}
+              </ReactMarkdown>
             </div>
           </article>
           <aside className="docs-provenance">
@@ -105,7 +117,7 @@ export function DocumentationHub({
             <a
               href={`https://github.com/${selected.repository}/blob/main/${selected.path}`}
               target="_blank"
-              rel="noopener"
+              rel="noopener noreferrer"
             >
               Edit on GitHub <ExternalLink size={13} />
             </a>
@@ -173,7 +185,10 @@ export function DocumentationHub({
       ) : (
         <div className="docs-index">
           {results.map((document) => (
-            <button onClick={() => setSelected(document)} key={document.id}>
+            <button
+              onClick={() => setSelected(document)}
+              key={`${document.service_name}:${document.path}`}
+            >
               <span className="docs-file-mark">
                 <FileText size={17} />
               </span>
@@ -232,7 +247,10 @@ export function ServiceDocumentation({ serviceName }: { serviceName: string }) {
         <>
           <div className="service-doc-list">
             {documents.slice(0, 8).map((document) => (
-              <button onClick={() => setSelected(document)} key={document.id}>
+              <button
+                onClick={() => setSelected(document)}
+                key={`${document.service_name}:${document.path}`}
+              >
                 <FileText size={15} />
                 <span>
                   <strong>{document.title}</strong>
@@ -252,7 +270,12 @@ export function ServiceDocumentation({ serviceName }: { serviceName: string }) {
               </button>
               <h3>{selected.title}</h3>
               <div className="markdown-body">
-                <ReactMarkdown>{selected.content}</ReactMarkdown>
+                <ReactMarkdown
+                  components={markdownComponents}
+                  urlTransform={safeMarkdownUrl}
+                >
+                  {selected.content}
+                </ReactMarkdown>
               </div>
             </div>
           )}

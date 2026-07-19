@@ -1,6 +1,7 @@
 import { useState } from "react";
 import { Archive, ArrowRight, CalendarClock, ExternalLink, ShieldCheck, Sparkles } from "lucide-react";
 import { experimentStatus, riskProfile } from "./governance";
+import { safeExternalUrl } from "./safe-url";
 
 type LifecycleAction = "extend" | "promote" | "archive";
 
@@ -87,7 +88,7 @@ export function LifecycleGuardrails({ service, signedIn }: { service: any; signe
           <button className="text-button" onClick={() => setAction(null)}>Cancel</button>
         </div>
       )}
-      {result?.url && <a className="guardrail-result" href={result.url} target="_blank" rel="noopener">Pull request #{result.number} opened <ExternalLink size={12} /></a>}
+      {safeExternalUrl(result?.url) && <a className="guardrail-result" href={safeExternalUrl(result.url)!} target="_blank" rel="noopener noreferrer">Pull request #{result.number} opened <ExternalLink size={12} /></a>}
       {result?.alreadySatisfied && <p className="guardrail-result">Metadata already matches this lifecycle state.</p>}
       {error && <p className="guardrail-error">{error}</p>}
     </section>

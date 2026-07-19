@@ -21,12 +21,24 @@ The browser never receives GitHub App private keys, OAuth client secrets, databa
 
 | Boundary | Control |
 | --- | --- |
-| Browser to API | GitHub OAuth session, role authorization, HTTP-only session cookie, and same-origin production serving |
+| Browser to API | Allowed-organization GitHub OAuth, opaque revocable session, role/ownership authorization, origin checks, rate limits, and same-origin production serving |
 | GitHub to API | HMAC verification for webhook deliveries and installation-scoped GitHub App tokens for API calls |
 | Configuration to runtime | Strict schema validation, one-revision activation, optimistic blob-SHA conflict checks, and last-known-good persistence |
 | Portal to repositories | Installation-scoped permissions; durable changes use branches, commits, and pull requests |
 | Plugins to catalog | Provider refreshes write isolated snapshots and cannot replace catalog metadata |
 | Deployment to UI | Secrets remain environment-only and are not returned by configuration APIs |
+
+Repository-authored Markdown is rendered without remote images and its links
+are limited to HTTP(S). Configured UI images are limited to same-origin assets
+and GitHub's avatar CDN. Production responses set a restrictive Content Security
+Policy, deny framing and MIME sniffing, minimize referrer and browser feature
+exposure, and enable HSTS when served over HTTPS.
+
+All substantive `/api` routes require an authenticated organization member by
+default. Only coarse health, public branding, OAuth login/callback, current
+session discovery, and the HMAC-verified GitHub webhook are public. Unsafe
+browser requests must carry the configured same-origin `Origin`; the webhook is
+exempt because its raw body is authenticated by its GitHub signature.
 
 ## GitHub permissions
 
@@ -44,9 +56,10 @@ If GitHub configuration becomes unavailable or invalid, Perongen continues servi
 
 - Terminate TLS at the deployment platform and set `PUBLIC_URL` and `APP_URL` to the public HTTPS origin.
 - Store PostgreSQL, OAuth, private-key, session, and webhook credentials in the platform secret store.
-- Generate independent high-entropy values for `SESSION_SECRET` and `GITHUB_WEBHOOK_SECRET`.
+- Generate a high-entropy value for `GITHUB_WEBHOOK_SECRET`; session tokens are generated randomly and stored only as hashes.
 - Subscribe the GitHub App only to the documented events and grant only required repository permissions.
-- Restrict break-glass access through `GITHUB_ADMIN_LOGINS`; manage normal administrators in versioned `access.yaml`.
+- Require `GITHUB_ALLOWED_ORGANIZATIONS` and restrict break-glass access through `GITHUB_ADMIN_IDS`; manage normal administrators by numeric ID in versioned `access.yaml`.
 - Back up PostgreSQL and monitor `/api/health`, configuration revision status, webhook deliveries, and integration health.
+- Run the production image as non-root with a read-only root filesystem, keep PostgreSQL private, and gate releases on `npm run audit:production`.
 
 For the complete variable contract, see [Environment variables](/reference/environment). For an installation walkthrough, continue to [Deploy Perongen](/admin/deployment).

@@ -17,6 +17,7 @@ import {
 } from "lucide-react";
 import { evaluateRule, ruleApplies, scorecardApplies } from "./scorecards";
 import { PageIntro } from "./ui/PageIntro";
+import { safeExternalUrl, safeUiImageUrl } from "./safe-url";
 
 type Section =
   "general" | "catalog" | "scorecards" | "actions" | "tools" | "integrations";
@@ -241,9 +242,9 @@ export function VisualSettings({ onRefresh }: { onRefresh: () => void }) {
       setSaving(false);
     }
   }
-  async function changeRole(login: string, role: string) {
+  async function changeRole(githubId: number, role: string) {
     try {
-      await jsonFetch(`/api/admin/users/${login}`, {
+      await jsonFetch(`/api/admin/users/${githubId}`, {
         method: "PATCH",
         headers: { "content-type": "application/json" },
         body: JSON.stringify({
@@ -301,7 +302,7 @@ export function VisualSettings({ onRefresh }: { onRefresh: () => void }) {
         </div>
         {config.source.appliedSha && (
           <a
-            href={`https://github.com/${config.source.repository}/commit/${config.source.appliedSha}`}
+            href={safeExternalUrl(`https://github.com/${config.source.repository}/commit/${config.source.appliedSha}`) || undefined}
             target="_blank"
             rel="noreferrer"
           >
@@ -2057,7 +2058,7 @@ function UserPanel({
   changeRole,
 }: {
   users: any[];
-  changeRole: (l: string, r: string) => void;
+  changeRole: (githubId: number, role: string) => void;
 }) {
   return (
     <>
@@ -2069,7 +2070,7 @@ function UserPanel({
       </div>
       {users.map((u) => (
         <div className="admin-user" key={u.login}>
-          <img src={u.avatar_url} />
+          <img src={safeUiImageUrl(u.avatar_url) || undefined} alt="" />
           <div>
             <strong>{u.name}</strong>
             <small>
@@ -2080,7 +2081,7 @@ function UserPanel({
           <select
             value={u.role}
             disabled={u.breakGlass}
-            onChange={(e) => changeRole(u.login, e.target.value)}
+            onChange={(e) => changeRole(u.github_id, e.target.value)}
           >
             <option value="member">Member</option>
             <option value="admin">Administrator</option>

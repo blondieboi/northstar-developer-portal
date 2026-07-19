@@ -4,7 +4,7 @@ import { commitIntegrations, commitSection, ConfigConflictError, configDirectory
 
 const saved={...process.env}
 describe('Git configuration push routing',()=>{
-  beforeEach(()=>{resetGitConfigForTests();process.env.PERONGEN_CONFIG_REPOSITORY='acme/portal-config';process.env.PERONGEN_CONFIG_BRANCH='main';process.env.PERONGEN_CONFIG_DIRECTORY='environments/production';process.env.PERONGEN_CONFIG_INSTALLATION_ID='42';process.env.GITHUB_ADMIN_LOGINS='breakglass'})
+  beforeEach(()=>{resetGitConfigForTests();process.env.PERONGEN_CONFIG_REPOSITORY='acme/portal-config';process.env.PERONGEN_CONFIG_BRANCH='main';process.env.PERONGEN_CONFIG_DIRECTORY='environments/production';process.env.PERONGEN_CONFIG_INSTALLATION_ID='42';process.env.GITHUB_ADMIN_IDS='42'})
   afterEach(()=>{resetGitConfigForTests();for(const key of Object.keys(process.env))if(!(key in saved))delete process.env[key];Object.assign(process.env,saved)})
   it('matches only the configured repository and branch',()=>{
     expect(configPushMatches({repository:{full_name:'acme/portal-config'},ref:'refs/heads/main'})).toBe(true)

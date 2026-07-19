@@ -34,6 +34,8 @@ describe("database schema", () => {
     for (const table of [
       "teams",
       "users",
+      "sessions",
+      "oauth_states",
       "team_members",
       "sync_runs",
       "action_runs",
@@ -57,6 +59,11 @@ describe("database schema", () => {
     expect(
       Array.from(db.public.getTable("users").getColumns()).some(
         (column) => column.name === "primary_team",
+      ),
+    ).toBe(true);
+    expect(
+      Array.from(db.public.getTable("sessions").getColumns()).some(
+        (column) => column.name === "matched_organizations",
       ),
     ).toBe(true);
     expect(

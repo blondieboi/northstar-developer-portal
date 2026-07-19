@@ -7,6 +7,28 @@ export const pool = process.env.DATABASE_URL
   ? new Pool({ connectionString: process.env.DATABASE_URL })
   : null;
 
+type MemoryUser = {
+  id: number;
+  github_id: number;
+  login: string;
+  name: string;
+  avatar_url: string;
+  email: string | null;
+  bio: string | null;
+  role: string;
+  primary_team: string | null;
+};
+type MemorySession = {
+  token_hash: string;
+  github_id: number;
+  matched_organizations: string[];
+  expires_at: Date;
+  revoked_at: Date | null;
+};
+const memoryUsers = new Map<number, MemoryUser>();
+const memorySessions = new Map<string, MemorySession>();
+const memoryOAuthStates = new Map<string, { expiresAt: Date; consumed: boolean }>();
+
 export async function migrate() {
   if (!pool) return;
   const sql = await readFile(
@@ -219,29 +241,203 @@ export async function upsertUser(user: {
   bio?: string | null;
   role: string;
 }) {
-  if (!pool) return user;
-  const { rows } = await pool.query(
-    `insert into users(github_id,login,name,avatar_url,email,bio,role,last_seen_at)
-    values($1,$2,$3,$4,$5,$6,$7,now()) on conflict(login) do update set github_id=excluded.github_id,name=excluded.name,
-    avatar_url=excluded.avatar_url,email=excluded.email,bio=excluded.bio,role=users.role,last_seen_at=now() returning *`,
-    [
-      user.githubId,
-      user.login,
-      user.name,
-      user.avatarUrl,
-      user.email || null,
-      user.bio || null,
-      user.role,
-    ],
-  );
-  return rows[0];
+  if (!pool) {
+    const collision = [...memoryUsers.values()].find(
+      (candidate) =>
+        candidate.github_id !== user.githubId &&
+        candidate.login.toLowerCase() === user.login.toLowerCase(),
+    );
+    if (collision) throw new Error("GitHub login is already associated with another GitHub ID");
+    const existing = memoryUsers.get(user.githubId);
+    const stored: MemoryUser = {
+      id: existing?.id || user.githubId,
+      github_id: user.githubId,
+      login: user.login,
+      name: user.name,
+      avatar_url: user.avatarUrl,
+      email: user.email || null,
+      bio: user.bio || null,
+      role: user.role,
+      primary_team: existing?.primary_team || null,
+    };
+    memoryUsers.set(user.githubId, stored);
+    return stored;
+  }
+  const client = await pool.connect();
+  try {
+    await client.query("begin");
+    const collision = await client.query(
+      "select github_id from users where lower(login)=lower($1) and github_id<>$2 for update",
+      [user.login, user.githubId],
+    );
+    if (collision.rowCount)
+      throw new Error("GitHub login is already associated with another GitHub ID");
+    const { rows } = await client.query(
+      `insert into users(github_id,login,name,avatar_url,email,bio,role,last_seen_at)
+      values($1,$2,$3,$4,$5,$6,$7,now()) on conflict(github_id) do update set login=excluded.login,name=excluded.name,
+      avatar_url=excluded.avatar_url,email=excluded.email,bio=excluded.bio,role=excluded.role,last_seen_at=now() returning *`,
+      [
+        user.githubId,
+        user.login,
+        user.name,
+        user.avatarUrl,
+        user.email || null,
+        user.bio || null,
+        user.role,
+      ],
+    );
+    await client.query("commit");
+    return rows[0];
+  } catch (error) {
+    await client.query("rollback");
+    if ((error as { code?: string }).code === "23505")
+      throw new Error("GitHub login is already associated with another GitHub ID");
+    throw error;
+  } finally {
+    client.release();
+  }
 }
 
 export async function findUser(login: string) {
-  if (!pool) return null;
+  if (!pool)
+    return [...memoryUsers.values()].find(
+      (user) => user.login.toLowerCase() === login.toLowerCase(),
+    ) || null;
   return pool
     .query("select * from users where lower(login)=lower($1)", [login])
     .then((x) => x.rows[0] || null);
+}
+export async function findUserByGithubId(githubId: number) {
+  if (!pool) return memoryUsers.get(githubId) || null;
+  return pool
+    .query("select * from users where github_id=$1", [githubId])
+    .then((x) => x.rows[0] || null);
+}
+
+export async function createSession(session: {
+  tokenHash: string;
+  githubId: number;
+  matchedOrganizations: string[];
+  expiresAt: Date;
+}) {
+  if (!pool) {
+    for (const [tokenHash, existing] of memorySessions)
+      if (existing.revoked_at || existing.expires_at.getTime() <= Date.now())
+        memorySessions.delete(tokenHash);
+    if (!memoryUsers.has(session.githubId)) throw new Error("Session user does not exist");
+    memorySessions.set(session.tokenHash, {
+      token_hash: session.tokenHash,
+      github_id: session.githubId,
+      matched_organizations: [...session.matchedOrganizations],
+      expires_at: session.expiresAt,
+      revoked_at: null,
+    });
+    return;
+  }
+  const client = await pool.connect();
+  try {
+    await client.query("begin");
+    await client.query("delete from sessions where revoked_at is not null or expires_at<=now()");
+    const inserted = await client.query(
+      `insert into sessions(token_hash,user_id,matched_organizations,expires_at)
+       select $1,id,$3,$4 from users where github_id=$2 returning id`,
+      [session.tokenHash, session.githubId, session.matchedOrganizations, session.expiresAt],
+    );
+    if (!inserted.rowCount) throw new Error("Session user does not exist");
+    await client.query(
+      "insert into audit_events(category,action,actor_login,target,after_value) select 'authentication','session.created',login,$1,$2 from users where github_id=$3",
+      [String(inserted.rows[0].id), { matchedOrganizations: session.matchedOrganizations, expiresAt: session.expiresAt.toISOString() }, session.githubId],
+    );
+    await client.query("commit");
+  } catch (error) {
+    await client.query("rollback");
+    throw error;
+  } finally {
+    client.release();
+  }
+}
+
+export async function findSessionUser(tokenHash: string) {
+  if (!pool) {
+    const session = memorySessions.get(tokenHash);
+    if (!session || session.revoked_at || session.expires_at.getTime() <= Date.now()) return null;
+    const user = memoryUsers.get(session.github_id);
+    return user ? { ...user, matched_organizations: session.matched_organizations, expires_at: session.expires_at } : null;
+  }
+  return pool
+    .query(
+      `select u.*,s.matched_organizations,s.expires_at from sessions s
+       join users u on u.id=s.user_id
+       where s.token_hash=$1 and s.revoked_at is null and s.expires_at>now()`,
+      [tokenHash],
+    )
+    .then((result) => result.rows[0] || null);
+}
+
+export async function revokeSession(tokenHash: string) {
+  if (!pool) {
+    const session = memorySessions.get(tokenHash);
+    if (session) session.revoked_at = new Date();
+    return;
+  }
+  await pool.query(
+    "update sessions set revoked_at=coalesce(revoked_at,now()) where token_hash=$1",
+    [tokenHash],
+  );
+}
+
+export async function storeOAuthState(stateHash: string, expiresAt: Date) {
+  if (!pool) {
+    for (const [hash, state] of memoryOAuthStates)
+      if (state.consumed || state.expiresAt.getTime() <= Date.now())
+        memoryOAuthStates.delete(hash);
+    memoryOAuthStates.set(stateHash, { expiresAt, consumed: false });
+    return;
+  }
+  const client = await pool.connect();
+  try {
+    await client.query("begin");
+    await client.query("delete from oauth_states where consumed_at is not null or expires_at<=now()");
+    await client.query(
+      "insert into oauth_states(state_hash,expires_at) values($1,$2)",
+      [stateHash, expiresAt],
+    );
+    await client.query("commit");
+  } catch (error) {
+    await client.query("rollback");
+    throw error;
+  } finally {
+    client.release();
+  }
+}
+
+export async function consumeOAuthState(stateHash: string) {
+  if (!pool) {
+    const state = memoryOAuthStates.get(stateHash);
+    if (!state || state.consumed || state.expiresAt.getTime() <= Date.now()) return false;
+    state.consumed = true;
+    return true;
+  }
+  const result = await pool.query(
+    `update oauth_states set consumed_at=now()
+     where state_hash=$1 and consumed_at is null and expires_at>now()
+     returning state_hash`,
+    [stateHash],
+  );
+  return Boolean(result.rowCount);
+}
+
+export async function isUserTeamMember(githubId: number, teamName: string) {
+  if (!pool) return false;
+  const normalizedTeam = teamName.replace(/^team:/, "");
+  const result = await pool.query(
+    `select 1 from users u
+     join team_members tm on tm.user_id=u.id
+     join teams t on t.id=tm.team_id
+     where u.github_id=$1 and lower(t.name)=lower($2) limit 1`,
+    [githubId, normalizedTeam],
+  );
+  return Boolean(result.rowCount);
 }
 export async function setUserPrimaryTeam(login: string, teamName: string) {
   if (!pool) return { login, primary_team: teamName };
@@ -371,17 +567,36 @@ export async function recordConfigSync(event: {
     ],
   );
 }
-export async function listAdminLogins() {
+export async function listAdminGithubIds() {
   if (!pool) return [];
   return pool
-    .query("select login from users where role='admin' order by lower(login)")
-    .then((x) => x.rows.map((row) => String(row.login)));
+    .query("select github_id from users where role='admin' and github_id is not null order by github_id")
+    .then((x) => x.rows.map((row) => Number(row.github_id)));
 }
-export async function projectUserRoles(admins: Set<string>) {
+export async function githubIdsForLogins(logins: string[]) {
+  if (!pool) {
+    return logins.map((login) => {
+      const user = [...memoryUsers.values()].find((candidate) => candidate.login.toLowerCase() === login.toLowerCase());
+      if (!user) throw new Error(`GitHub user not found: ${login}`);
+      return { login: user.login, githubId: user.github_id };
+    });
+  }
+  const rows = await pool.query(
+    "select login,github_id from users where lower(login)=any($1::text[]) and github_id is not null",
+    [logins.map((login) => login.toLowerCase())],
+  );
+  const byLogin = new Map(rows.rows.map((row) => [String(row.login).toLowerCase(), Number(row.github_id)]));
+  return logins.map((login) => {
+    const githubId = byLogin.get(login.toLowerCase());
+    if (!githubId) throw new Error(`GitHub user not found: ${login}`);
+    return { login, githubId };
+  });
+}
+export async function projectUserRoles(admins: Set<number>) {
   if (!pool) return;
   await pool.query(
-    "update users set role=case when lower(login)=any($1::text[]) then 'admin' else 'member' end",
-    [[...admins].map((x) => x.toLowerCase())],
+    "update users set role=case when github_id=any($1::bigint[]) then 'admin' else 'member' end",
+    [[...admins]],
   );
 }
 export async function saveConfigOverride(

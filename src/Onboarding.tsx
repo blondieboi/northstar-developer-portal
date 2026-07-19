@@ -11,6 +11,7 @@ import {
   Sparkles,
   X,
 } from "lucide-react";
+import { safeExternalUrl } from "./safe-url";
 
 type SetupState = {
   checks: Record<string, boolean>;
@@ -388,7 +389,7 @@ export function OnboardingGate({
                 )}
                 <a
                   className="onboarding-doc-link"
-                  href={documentationUrl}
+                  href={safeExternalUrl(documentationUrl) || undefined}
                   target="_blank"
                   rel="noopener noreferrer"
                 >

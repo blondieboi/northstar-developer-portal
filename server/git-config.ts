@@ -70,7 +70,7 @@ async function performSync(actor:string,requestedSha?:string):Promise<SyncResult
     const before=getConfig();const changed=hasApplied?changedSections(before,revision.config):configSections
     activateConfig(revision.config);hasApplied=true
     source={...source,observedSha,appliedSha:observedSha,files:revision.files,status:'ready',error:null,syncedAt:now(),appliedAt:now()}
-    const effectiveAdmins=new Set([...revision.config.access.admins.map(x=>x.toLowerCase()),...getBreakGlassAdmins()])
+    const effectiveAdmins=new Set([...revision.config.access.admins,...getBreakGlassAdmins()])
     await saveConfigState({observedSha,appliedSha:observedSha,config:revision.config,fileShas:Object.fromEntries(Object.entries(revision.files).map(([section,file])=>[section,file!.sha])),status:'ready',error:null,applied:true})
     await projectUserRoles(effectiveAdmins);await applyHook(changed,revision.config);await recordConfigSync({observedSha,appliedSha:observedSha,status:'applied',actor})
     return{changed,source:getConfigSource()}

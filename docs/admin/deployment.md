@@ -26,10 +26,12 @@ The in-product setup panel reads these conditions from the running system. Its g
 
 ## Prepare the database
 
-For local evaluation, start the included database:
+The included Compose service is development-only, requires an explicit password,
+and publishes PostgreSQL on loopback only:
 
 ```bash
-docker compose up -d postgres
+POSTGRES_PASSWORD='choose-a-non-default-local-password' \
+  docker compose --profile development up -d postgres
 ```
 
 The default connection uses port `5440`. Production deployments should provide a managed PostgreSQL URL through `DATABASE_URL` and should back up the database according to their recovery requirements.
@@ -49,7 +51,7 @@ perongen/
 └── tools.yaml
 ```
 
-Set `PERONGEN_CONFIG_REPOSITORY`, `PERONGEN_CONFIG_BRANCH`, `PERONGEN_CONFIG_DIRECTORY`, and `PERONGEN_CONFIG_INSTALLATION_ID` to that location. Add at least one administrator to `access.yaml` or configure a break-glass login through `GITHUB_ADMIN_LOGINS`.
+Set `PERONGEN_CONFIG_REPOSITORY`, `PERONGEN_CONFIG_BRANCH`, `PERONGEN_CONFIG_DIRECTORY`, and `PERONGEN_CONFIG_INSTALLATION_ID` to that location. Add at least one administrator to `access.yaml` or configure a break-glass GitHub ID through `GITHUB_ADMIN_IDS`.
 
 ## Configure the environment
 
@@ -68,12 +70,25 @@ GITHUB_CLIENT_ID=Iv1.example
 GITHUB_CLIENT_SECRET=stored-in-your-secret-manager
 GITHUB_PRIVATE_KEY_PATH=/run/secrets/github-app.pem
 GITHUB_WEBHOOK_SECRET=stored-in-your-secret-manager
-SESSION_SECRET=long-random-deployment-secret
+GITHUB_ALLOWED_ORGANIZATIONS=your-org,partner-org
+GITHUB_ADMIN_IDS=12345678
 PUBLIC_URL=https://portal.example.com
 APP_URL=https://portal.example.com
+TRUST_PROXY_HOPS=1
 ```
 
 Use [Environment variables](/reference/environment) for the full list.
+
+Production startup fails closed when the database, GitHub OAuth/App,
+webhook, allowed-organization, configuration repository, or URL contract is
+incomplete. `PUBLIC_URL` must be HTTPS, and `APP_URL` must use the same origin.
+Development may use the documented localhost origins; CORS is limited to that
+exact UI origin.
+
+Production assumes one HTTPS reverse-proxy hop so authentication and mutation
+rate limits use the real client IP. Set `TRUST_PROXY_HOPS` to the exact number
+of trusted hops in front of the app, keep the container unreachable except
+through that proxy, and use `0` only when clients connect directly.
 
 ## Build and start
 
@@ -83,7 +98,23 @@ npm run build
 npm start
 ```
 
-The included `Dockerfile` can package the same production build. Mount secrets and configuration through the deployment platform; do not bake them into the image.
+The included `Dockerfile` compiles the API and shared runtime modules, installs
+production dependencies only, runs as a non-root user, and exposes a health
+check. Mount secrets and configuration through the deployment platform; do not
+bake them into the image. Run the image with a read-only root filesystem and a
+small temporary filesystem when the platform supports it, for example
+`--read-only --tmpfs /tmp:rw,noexec,nosuid,size=16m`.
+
+Before launch, run `npm run audit:production` in addition to tests and builds.
+VitePress is a documentation-development dependency and its development server
+must remain bound to a trusted local environment; it is not installed in the
+production image. Track its Vite/esbuild advisory chain and upgrade when a
+stable compatible release is available.
+
+If this repository was ever submitted to a remote Docker builder before the
+strict `.dockerignore` was added, rotate every production-equivalent secret
+that may have been present and purge the affected builder cache. Image history
+and remote caches are not made safe merely by deleting the local file.
 
 ## Complete first-run setup
 
@@ -109,3 +140,13 @@ npm run config:export -- --output ./perongen-config
 ```
 
 The exporter validates all seven documents and includes current database administrators. It refuses to overwrite output unless `--force` is supplied. Review and commit the result before pointing production at it. Existing Git-backed installations may add `integrations.yaml` later; Perongen supplies an empty in-memory section until its first UI save.
+
+Installations that previously keyed administrators by login must also translate
+those logins to immutable GitHub IDs before launch:
+
+```bash
+npm run admins:migrate -- octocat hubot
+```
+
+Review and commit the generated access configuration, then replace any legacy
+break-glass login setting with `GITHUB_ADMIN_IDS`.

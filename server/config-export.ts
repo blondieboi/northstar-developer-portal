@@ -3,7 +3,7 @@ import { mkdir, readFile, writeFile } from 'node:fs/promises'
 import { resolve } from 'node:path'
 import YAML from 'yaml'
 import { configSchema, configSections, defaults, serializeSection, validateSection, type PortalConfig } from './config.js'
-import { getConfigOverrides, listAdminLogins, migrate, pool } from './db.js'
+import { getConfigOverrides, listAdminGithubIds, migrate, pool } from './db.js'
 
 const args=process.argv.slice(2);const outputArg=args.indexOf('--output');const output=outputArg>=0?args[outputArg+1]:undefined;const force=args.includes('--force')
 if(!output)throw new Error('Usage: npm run config:export -- --output <directory> [--force]')
@@ -20,7 +20,7 @@ for(const [section,value] of Object.entries(await getConfigOverrides())){
   const normalized=section==='access'&&value&&typeof value==='object'&&'bootstrapAdmins' in value?{admins:(value as any).bootstrapAdmins}:section==='scorecards'&&value&&typeof value==='object'&&'rules' in value&&!('cards' in value)?validateSection('scorecards',value):value
   aggregate={...aggregate,[section]:normalized}
 }
-const currentAdmins=await listAdminLogins();aggregate.access={admins:Array.from(new Set([...(aggregate.access?.admins||[]),...currentAdmins])).sort((a:string,b:string)=>a.localeCompare(b))}
+const currentAdmins=await listAdminGithubIds();aggregate.access={admins:Array.from(new Set([...(aggregate.access?.admins||[]),...currentAdmins])).sort((a:number,b:number)=>a-b)}
 const config=configSchema.parse(aggregate) as PortalConfig;const directory=resolve(output)
 for(const section of configSections){const path=resolve(directory,`${section}.yaml`);if(existsSync(path)&&!force)throw new Error(`${path} already exists; use --force to replace generated files`)}
 await mkdir(directory,{recursive:true})
