@@ -6,7 +6,7 @@ export default defineConfig({
   title: "Perongen",
   titleTemplate: ":title · Perongen documentation",
   description:
-    "Guides and reference for operating the Perongen developer portal.",
+    "A self-hosted, GitHub-native developer portal for software ownership, standards, and reviewable guardrails.",
   lang: "en-US",
   base: "/northstar-developer-portal/",
   cleanUrls: true,
@@ -34,6 +34,7 @@ export default defineConfig({
     logo: false,
     siteTitle: "Perongen / Documentation",
     nav: [
+      { text: "Product", link: "/" },
       { text: "Guides", link: "/getting-started/" },
       { text: "Administration", link: "/admin/deployment" },
       { text: "Reference", link: "/reference/configuration" },
@@ -44,6 +45,7 @@ export default defineConfig({
         text: "Start here",
         items: [
           { text: "What is Perongen?", link: "/overview" },
+          { text: "Architecture & security", link: "/architecture-security" },
           { text: "Getting started", link: "/getting-started/" },
           { text: "Navigate the portal", link: "/getting-started/navigation" },
         ],

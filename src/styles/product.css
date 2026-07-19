@@ -1056,6 +1056,194 @@ header {
     font-size: 45px;
   }
 }
+
+/* First-run activation */
+.setup-launcher-error {
+  background: var(--danger);
+}
+.deferred-surface {
+  display: grid;
+  align-content: start;
+  gap: 10px;
+  min-height: 280px;
+  padding-top: 72px;
+  color: var(--muted);
+}
+.deferred-surface .skeleton-line {
+  width: min(460px, 78vw);
+  height: 12px;
+  border-radius: 3px;
+  background: color-mix(in srgb, var(--line) 72%, transparent);
+  animation: deferred-pulse 1.1s ease-in-out infinite alternate;
+}
+.deferred-surface .skeleton-line.short {
+  width: min(280px, 56vw);
+}
+.deferred-surface strong {
+  margin-top: 10px;
+  font-size: 11px;
+  font-weight: 600;
+}
+@keyframes deferred-pulse {
+  to { opacity: .38; }
+}
+@media (prefers-reduced-motion: reduce) {
+  .deferred-surface .skeleton-line { animation: none; }
+}
+.onboarding {
+  border: 1px solid color-mix(in srgb, var(--line) 75%, transparent);
+  border-radius: 12px;
+  background: var(--canvas);
+}
+.onboarding-head h1 {
+  font-size: 36px;
+  line-height: 1;
+}
+.onboarding-head p:last-child {
+  max-width: 520px;
+  font-size: 11px;
+  line-height: 1.55;
+}
+.flight-path button {
+  cursor: pointer;
+  border-radius: 7px;
+  transition: border-color 0.16s ease, background 0.16s ease, transform 0.16s ease;
+}
+.flight-path button:hover {
+  border-color: color-mix(in srgb, var(--blue) 45%, var(--line));
+  transform: translateY(-1px);
+}
+.flight-path button small {
+  font-size: 8px;
+  line-height: 1.3;
+}
+.flight-path button strong {
+  font-size: 10px;
+  line-height: 1.3;
+}
+.flight-path button.active {
+  border-color: var(--blue);
+  box-shadow: 0 0 0 2px color-mix(in srgb, var(--blue) 12%, transparent);
+}
+.gate-detail {
+  border-radius: 8px;
+}
+.gate-copy h2 {
+  font-size: 30px;
+  line-height: 1.05;
+}
+.gate-copy > p:not(.eyebrow) {
+  font-size: 11px;
+  line-height: 1.65;
+}
+.readiness-row span {
+  font-size: 11px;
+}
+.readiness-row strong {
+  font-size: 8px;
+  letter-spacing: 0.03em;
+}
+.readiness-row.pending svg {
+  color: var(--muted);
+}
+.readiness-row.ready svg {
+  color: var(--green);
+}
+.gate-action h3 {
+  font-size: 14px;
+  line-height: 1.35;
+}
+.gate-action p {
+  font-size: 10px;
+  line-height: 1.65;
+}
+.gate-input-label {
+  display: block;
+  margin-top: 16px;
+  color: #c2c8d6;
+  font: 8px "DM Mono", monospace;
+  letter-spacing: 0.07em;
+  text-transform: uppercase;
+}
+.gate-action-stack {
+  display: grid;
+  gap: 8px;
+  margin-top: 16px;
+}
+.gate-action-stack .primary,
+.gate-action-stack .ghost-button {
+  width: 100%;
+  margin: 0;
+  justify-content: center;
+}
+.deployment-missing-list {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 6px;
+  margin: 12px 0;
+  padding: 0;
+  list-style: none;
+}
+.deployment-missing-list li {
+  padding: 5px 7px;
+  border: 1px solid #404962;
+  border-radius: 4px;
+  background: #202941;
+}
+.configuration-diagnostic {
+  display: grid;
+  gap: 5px;
+  margin: 14px 0;
+  padding: 10px;
+  border: 1px solid color-mix(in srgb, var(--danger) 45%, #404962);
+  border-radius: 5px;
+  background: color-mix(in srgb, var(--danger) 10%, #202941);
+}
+.configuration-diagnostic strong {
+  font-size: 10px;
+  text-transform: capitalize;
+}
+.configuration-diagnostic span {
+  color: #c2c8d6;
+  font-size: 9px;
+  line-height: 1.5;
+}
+.onboarding-message {
+  font-size: 10px;
+  line-height: 1.45;
+}
+.onboarding-doc-link {
+  font-size: 9px;
+}
+
+@media (max-width: 600px) {
+  .onboarding-wrap {
+    align-items: end;
+    padding: 0;
+  }
+  .onboarding {
+    width: 100%;
+    max-height: 94vh;
+    padding: 22px 18px;
+    border-right: 0;
+    border-bottom: 0;
+    border-left: 0;
+    border-radius: 12px 12px 0 0;
+  }
+  .onboarding-head h1 {
+    font-size: 31px;
+  }
+  .flight-path {
+    grid-template-columns: 1fr 1fr;
+  }
+  .flight-path button {
+    min-height: 58px;
+  }
+  .gate-copy,
+  .gate-action {
+    padding: 20px;
+  }
+}
 @media (prefers-reduced-motion: reduce) {
   .page {
     animation: none;

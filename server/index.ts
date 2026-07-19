@@ -100,6 +100,7 @@ import {
   openIntakePullRequest,
 } from "./intake.js";
 import type { IntakeDraft } from "../src/intake-contract.js";
+import { isOnboardingComplete } from "../src/onboarding-contract.js";
 
 const server = Fastify({ logger: true });
 async function reconcileCampaignStatus(id: string | number) {
@@ -518,8 +519,11 @@ server.get("/api/onboarding", async () => {
   };
   return {
     checks,
-    complete: Object.values(checks).every(Boolean),
+    complete: isOnboardingComplete(checks),
     stats,
+    installationId: Number(
+      cfg.catalog.installationId || process.env.GITHUB_INSTALLATION_ID,
+    ) || null,
     webhookUrl: `${publicUrl}/api/github/webhook`,
     webhookUrlPublic: !/^https?:\/\/(localhost|127\.0\.0\.1)(:|\/|$)/i.test(
       publicUrl,

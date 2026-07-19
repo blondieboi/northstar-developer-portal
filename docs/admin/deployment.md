@@ -2,6 +2,20 @@
 
 Perongen runs as a Vite frontend, a Fastify API, and PostgreSQL. The API serves the production frontend and owns GitHub, configuration, session, and persistence operations.
 
+The first-run target is a scored repository, not a perfectly customized portal. Complete the foundation, connect GitHub, register one service, and confirm its default metadata-quality scorecard before changing branding or publishing workflows.
+
+## Activation path
+
+| Checkpoint | You are done when |
+| --- | --- |
+| Deploy | `/api/health` responds and reports the configuration state |
+| Sign in | The bootstrap administrator can open the control plane |
+| Connect | The GitHub installation ID is saved and synchronization completes |
+| Catalog | One repository is registered from metadata or an Application Intake pull request |
+| Score | The service appears in the default Metadata quality scorecard |
+
+The in-product setup panel reads these conditions from the running system. Its gate cards are selectable, so operators can revisit completed steps or inspect a later requirement without losing progress.
+
 ## Prerequisites
 
 - Node.js compatible with the repository's current Vite toolchain;
@@ -78,9 +92,13 @@ Sign in as an administrator. The first-run flight path verifies:
 1. Database, GitHub App, OAuth, webhook secret, and configuration repository.
 2. GitHub installation and canonical configuration revision.
 3. At least one synchronized service.
-4. An enabled scorecard rule and a published action.
+4. At least one enabled scorecard evaluating the catalog.
 
 Each gate reads the running system rather than storing a manual checklist.
+
+If installed repositories do not contain `.portal/service.yaml` yet, open **Application Intake** from the catalog gate. Perongen will inspect repository evidence, ask an administrator to confirm ownership, lifecycle, and risk facts, then open the first metadata file as a reviewable pull request. Merge it and select **Synchronize again**.
+
+Publishing self-service actions, enabling additional GitHub plugins, changing portal identity, and adding more scorecards are deliberately post-activation tasks. They do not keep first-run setup open.
 
 ## Migrate an older installation
 

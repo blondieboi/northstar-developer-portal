@@ -1,4 +1,12 @@
-import { useEffect, useLayoutEffect, useMemo, useRef, useState } from "react";
+import {
+  lazy,
+  Suspense,
+  useEffect,
+  useLayoutEffect,
+  useMemo,
+  useRef,
+  useState,
+} from "react";
 import {
   Activity,
   ArrowRight,
@@ -38,7 +46,6 @@ import {
 } from "lucide-react";
 import { ConfiguredActions, ConfiguredScorecards } from "./ControlPlane";
 import { OnboardingGate } from "./Onboarding";
-import { VisualSettings } from "./VisualSettings";
 import {
   applicableRules,
   evaluateRule,
@@ -56,9 +63,28 @@ import { ServiceOperations } from "./ServiceOperations";
 import { StandardsChecks } from "./StandardsRemediation";
 import { LifecycleGuardrails } from "./LifecycleGuardrails";
 import { riskProfile } from "./governance";
-import { AnalyticsPage, CampaignsPage } from "./AdminPlatform";
-import { ApplicationIntake } from "./ApplicationIntake";
 import { trackPortalEvent } from "./telemetry";
+
+const VisualSettings = lazy(() =>
+  import("./VisualSettings").then((module) => ({
+    default: module.VisualSettings,
+  })),
+);
+const ApplicationIntake = lazy(() =>
+  import("./ApplicationIntake").then((module) => ({
+    default: module.ApplicationIntake,
+  })),
+);
+const CampaignsPage = lazy(() =>
+  import("./AdminPlatform").then((module) => ({
+    default: module.CampaignsPage,
+  })),
+);
+const AnalyticsPage = lazy(() =>
+  import("./AdminPlatform").then((module) => ({
+    default: module.AnalyticsPage,
+  })),
+);
 
 type View =
   | "overview"
@@ -294,6 +320,21 @@ function Logo({ name = "Perongen" }: { name?: string }) {
     <div className="logo">
       <span>{name}</span>
     </div>
+  );
+}
+function DeferredSurface({ children }: { children: React.ReactNode }) {
+  return (
+    <Suspense
+      fallback={
+        <div className="page deferred-surface" role="status">
+          <span className="skeleton-line" />
+          <span className="skeleton-line short" />
+          <strong>Loading administration tools…</strong>
+        </div>
+      }
+    >
+      {children}
+    </Suspense>
   );
 }
 function ScoreRing({
@@ -2683,17 +2724,25 @@ export function App() {
         ) : view === "people" ? (
           <PeoplePage users={data.users} />
         ) : view === "settings" && user?.role === "admin" ? (
-          <VisualSettings onRefresh={refresh} />
+          <DeferredSurface>
+            <VisualSettings onRefresh={refresh} />
+          </DeferredSurface>
         ) : view === "intake" && user?.role === "admin" ? (
-          <ApplicationIntake />
+          <DeferredSurface>
+            <ApplicationIntake />
+          </DeferredSurface>
         ) : view === "campaigns" && user?.role === "admin" ? (
-          <CampaignsPage
-            services={data.services}
-            tiers={portal.catalog.tiers}
-            types={portal.catalog.types}
-          />
+          <DeferredSurface>
+            <CampaignsPage
+              services={data.services}
+              tiers={portal.catalog.tiers}
+              types={portal.catalog.types}
+            />
+          </DeferredSurface>
         ) : view === "analytics" && user?.role === "admin" ? (
-          <AnalyticsPage />
+          <DeferredSurface>
+            <AnalyticsPage />
+          </DeferredSurface>
         ) : (
           <Integrations refresh={refresh} />
         )}
@@ -2702,6 +2751,7 @@ export function App() {
         user={user}
         onRefresh={refresh}
         onOpenSettings={() => navigate("settings")}
+        onOpenIntake={() => navigate("intake")}
       />
       <CommandPalette
         open={searchOpen}

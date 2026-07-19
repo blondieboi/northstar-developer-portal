@@ -1,20 +1,482 @@
-import { useEffect, useMemo, useState } from 'react'
-import { ArrowRight, Check, Circle, Database, ExternalLink, GitBranch, Radar, ShieldCheck, Sparkles, X } from 'lucide-react'
+import { useEffect, useMemo, useState } from "react";
+import {
+  ArrowRight,
+  Check,
+  Circle,
+  Database,
+  ExternalLink,
+  GitBranch,
+  Radar,
+  ShieldCheck,
+  Sparkles,
+  X,
+} from "lucide-react";
 
-type State={checks:Record<string,boolean>;complete:boolean;stats:{users:number;services:number;syncs:number};webhookUrl:string;webhookUrlPublic:boolean;missingDeployment:string[]}
-const gates=[
-  {id:'foundation',title:'Secure the foundation',body:'Verify the deployment connections and canonical Git configuration revision.',keys:['database','githubApp','oauth','webhookSecret','configRepository','configRevision'],icon:Database},
-  {id:'identity',title:'Open the control room',body:'Sign in as the bootstrap administrator and choose the GitHub App installation.',keys:['administrator','installation'],icon:ShieldCheck},
-  {id:'catalog',title:'Acquire the first signal',body:'Synchronize GitHub and register at least one service from repository metadata.',keys:['firstSync','firstService'],icon:Radar},
-  {id:'experience',title:'Publish the portal',body:'Enable a scorecard and publish the first self-service workflow.',keys:['scorecard','publishedAction'],icon:Sparkles}
-]
+type SetupState = {
+  checks: Record<string, boolean>;
+  complete: boolean;
+  stats: { users: number; services: number; syncs: number };
+  installationId: number | null;
+  webhookUrl: string;
+  webhookUrlPublic: boolean;
+  missingDeployment: string[];
+  configSource: {
+    status: string;
+    error: string | null;
+    appliedSha: string | null;
+  };
+};
 
-export function OnboardingGate({user,onRefresh,onOpenSettings}:{user:any;onRefresh:()=>void;onOpenSettings:()=>void}){
-  const [state,setState]=useState<State|null>(null),[open,setOpen]=useState(false),[installation,setInstallation]=useState(''),[working,setWorking]=useState(false),[message,setMessage]=useState(''),[documentationUrl,setDocumentationUrl]=useState('')
-  async function load(){const[x,portal]=await Promise.all([fetch('/api/onboarding').then(r=>r.json()),fetch('/api/portal').then(r=>r.json())]);setState(x);setDocumentationUrl(portal?.general?.documentationUrl||'');if(user?.role==='admin'&&!x.complete&&!sessionStorage.getItem('northstar-onboarding-dismissed'))setOpen(true)}
-  useEffect(()=>{load()},[user?.role])
-  const active=useMemo(()=>state?Math.max(0,gates.findIndex(g=>!g.keys.every(k=>state.checks[k]))):0,[state])
-  async function connect(){setWorking(true);setMessage('');try{const c=await fetch('/api/admin/config').then(r=>r.json());const value={...c.effective.catalog,installationId:Number(installation)};const saved=await fetch('/api/admin/config/catalog',{method:'PUT',headers:{'content-type':'application/json'},body:JSON.stringify({value})});if(!saved.ok)throw new Error((await saved.json()).error);const sync=await fetch('/api/github/sync',{method:'POST',headers:{'content-type':'application/json'},body:JSON.stringify({installationId:Number(installation)})});const result=await sync.json();if(!sync.ok)throw new Error(result.error);setMessage(`Synchronized ${result.registered} services.`);await load();onRefresh()}catch(e){setMessage((e as Error).message)}finally{setWorking(false)}}
-  if(!state||user?.role!=='admin'||state.complete)return null
-  return <>{!open&&<button className="setup-launcher" onClick={()=>setOpen(true)}><Radar size={15}/><span>Finish portal setup</span><b>{Object.values(state.checks).filter(Boolean).length}/{Object.keys(state.checks).length}</b></button>}{open&&<div className="onboarding-wrap"><div className="onboarding-scrim"/><section className="onboarding"><button className="onboarding-close" aria-label="Close setup" onClick={()=>{sessionStorage.setItem('northstar-onboarding-dismissed','1');setOpen(false)}}><X size={18}/></button><header className="onboarding-head"><div className="flight-mark"><Radar size={24}/></div><div><p className="eyebrow">FIRST-RUN SETUP</p><h1>Bring Perongen online.</h1><p>Each step is verified against the running portal.</p></div></header><div className="flight-path">{gates.map((g,i)=>{const done=g.keys.every(k=>state.checks[k]);const Icon=g.icon;return <button className={`${done?'done':''} ${active===i?'active':''}`} key={g.id}><span>{done?<Check size={14}/>:<Icon size={14}/>}</span><small>Gate {i+1}</small><strong>{g.title}</strong></button>})}</div><div className="gate-detail"><div className="gate-copy"><p className="eyebrow">GATE {active+1}</p><h2>{gates[active].title}</h2><p>{gates[active].body}</p>{gates[active].keys.map(k=><div className="readiness-row" key={k}>{state.checks[k]?<Check size={15}/>:<Circle size={15}/>}<span>{k.replace(/([A-Z])/g,' $1')}</span><strong>{state.checks[k]?'Ready':'Needs attention'}</strong></div>)}</div><aside className="gate-action">{active===0&&<Foundation state={state} checkAgain={load}/>} {active===1&&<><h3>GitHub installation</h3><p>Paste the installation ID shown in your GitHub App installation URL.</p><input value={installation} onChange={e=>setInstallation(e.target.value)} inputMode="numeric" placeholder="145753228"/><button className="primary" disabled={!installation||working} onClick={connect}>{working?'Connecting…':'Save and synchronize'} <ArrowRight size={14}/></button></>}{active===2&&<><h3>Catalog metadata</h3><p>Add the configured service metadata file to at least one repository, then synchronize again.</p><input value={installation} onChange={e=>setInstallation(e.target.value)} inputMode="numeric" placeholder="Installation ID"/><button className="primary" disabled={!installation||working} onClick={connect}>Synchronize now</button></>}{active===3&&<><h3>Shape the experience</h3><p>Use the visual builders to review scorecards and publish a workflow action.</p><button className="primary" onClick={()=>{setOpen(false);onOpenSettings()}}>Open builders <ArrowRight size={14}/></button></>}{documentationUrl&&<a className="onboarding-doc-link" href={documentationUrl} target="_blank" rel="noopener noreferrer">Open setup documentation <ExternalLink size={12}/></a>}{message&&<div className="onboarding-message">{message}</div>}</aside></div></section></div>}</>}
-function Foundation({state,checkAgain}:{state:State;checkAgain:()=>void}){return <><GitBranch size={28}/><h3>{state.missingDeployment.length===1?'One deployment setting is missing':'Deployment settings'}</h3>{state.missingDeployment.length?<><p>Add <code>{state.missingDeployment.join(', ')}</code> to Perongen’s deployment environment.</p>{state.missingDeployment.includes('GITHUB_WEBHOOK_SECRET')&&<p>Generate a strong secret and use the identical value for <code>GITHUB_WEBHOOK_SECRET</code> and the GitHub App’s webhook secret.</p>}</>:<p>Deployment settings are available. Restart Perongen if they were added after this process started.</p>}<div className="webhook-address"><small>GitHub App webhook URL</small><code>{state.webhookUrl}</code></div>{!state.webhookUrlPublic&&<p><strong>This localhost URL is not reachable by GitHub.</strong> For webhook testing, set <code>PUBLIC_URL</code> to a public HTTPS tunnel or deployment URL.</p>}<p>Subscribe the GitHub App to <strong>Push</strong> events, restart Perongen, then check again.</p><button className="ghost-button" onClick={checkAgain}>Check again</button></>}
+const setupGuide =
+  "https://blondieboi.github.io/northstar-developer-portal/admin/deployment";
+
+const gates = [
+  {
+    id: "foundation",
+    title: "Secure the foundation",
+    body: "Verify the deployment connections and the canonical configuration revision.",
+    keys: [
+      "database",
+      "githubApp",
+      "oauth",
+      "webhookSecret",
+      "configRepository",
+      "configRevision",
+    ],
+    icon: Database,
+  },
+  {
+    id: "identity",
+    title: "Connect GitHub",
+    body: "Confirm the bootstrap administrator and choose the GitHub App installation Perongen should inspect.",
+    keys: ["administrator", "installation"],
+    icon: ShieldCheck,
+  },
+  {
+    id: "catalog",
+    title: "Catalog one service",
+    body: "Synchronize repository metadata or use Application Intake to open the first onboarding pull request.",
+    keys: ["firstSync", "firstService"],
+    icon: Radar,
+  },
+  {
+    id: "experience",
+    title: "See the first standard",
+    body: "Confirm that at least one enabled scorecard is evaluating the catalog. Workflows can be published later.",
+    keys: ["scorecard"],
+    icon: Sparkles,
+  },
+];
+
+async function readJson(response: Response, fallback: string) {
+  const body = await response.json().catch(() => ({}));
+  if (!response.ok) throw new Error(body.error || fallback);
+  return body;
+}
+
+function checkLabel(key: string) {
+  const labels: Record<string, string> = {
+    database: "Database connection",
+    githubApp: "GitHub App credentials",
+    oauth: "GitHub sign-in",
+    webhookSecret: "Webhook signature secret",
+    configRepository: "Configuration repository",
+    configRevision: "Validated configuration revision",
+    administrator: "Bootstrap administrator",
+    installation: "Catalog installation",
+    firstSync: "First catalog synchronization",
+    firstService: "First service registered",
+    scorecard: "Enabled scorecard",
+  };
+  return labels[key] || key.replace(/([A-Z])/g, " $1");
+}
+
+export function OnboardingGate({
+  user,
+  onRefresh,
+  onOpenSettings,
+  onOpenIntake,
+}: {
+  user: any;
+  onRefresh: () => void;
+  onOpenSettings: () => void;
+  onOpenIntake: () => void;
+}) {
+  const [state, setState] = useState<SetupState | null>(null);
+  const [open, setOpen] = useState(false);
+  const [selectedGate, setSelectedGate] = useState<number | null>(null);
+  const [installation, setInstallation] = useState("");
+  const [working, setWorking] = useState(false);
+  const [message, setMessage] = useState("");
+  const [loadError, setLoadError] = useState("");
+  const [documentationUrl, setDocumentationUrl] = useState(setupGuide);
+
+  async function load() {
+    setLoadError("");
+    try {
+      const [nextState, portal] = await Promise.all([
+        fetch("/api/onboarding").then((response) =>
+          readJson(response, "Setup readiness could not be checked"),
+        ),
+        fetch("/api/portal").then((response) =>
+          readJson(response, "Portal configuration could not be loaded"),
+        ),
+      ]);
+      const typedState = nextState as SetupState;
+      setState(typedState);
+      setInstallation(
+        typedState.installationId
+          ? String(typedState.installationId)
+          : "",
+      );
+      const docsRoot = String(portal?.general?.documentationUrl || "").replace(
+        /\/$/,
+        "",
+      );
+      setDocumentationUrl(docsRoot || setupGuide);
+      if (
+        user?.role === "admin" &&
+        !typedState.complete &&
+        !sessionStorage.getItem("northstar-onboarding-dismissed")
+      )
+        setOpen(true);
+    } catch (error) {
+      setLoadError((error as Error).message);
+    }
+  }
+
+  useEffect(() => {
+    void load();
+  }, [user?.role]);
+
+  const nextIncomplete = useMemo(
+    () =>
+      state
+        ? Math.max(
+            0,
+            gates.findIndex((gate) =>
+              gate.keys.some((key) => !state.checks[key]),
+            ),
+          )
+        : 0,
+    [state],
+  );
+  const active = selectedGate ?? nextIncomplete;
+  const completedGates = state
+    ? gates.filter((gate) => gate.keys.every((key) => state.checks[key])).length
+    : 0;
+  const validInstallation = /^\d+$/.test(installation) && Number(installation) > 0;
+
+  async function synchronize(saveInstallation: boolean) {
+    if (!validInstallation) return;
+    setWorking(true);
+    setMessage("");
+    try {
+      if (saveInstallation) {
+        const config = await fetch("/api/admin/config").then((response) =>
+          readJson(response, "Catalog settings could not be loaded"),
+        );
+        const value = {
+          ...config.effective.catalog,
+          installationId: Number(installation),
+        };
+        await fetch("/api/admin/config/catalog", {
+          method: "PUT",
+          headers: { "content-type": "application/json" },
+          body: JSON.stringify({ value }),
+        }).then((response) =>
+          readJson(response, "The GitHub installation could not be saved"),
+        );
+      }
+      const result = await fetch("/api/github/sync", {
+        method: "POST",
+        headers: { "content-type": "application/json" },
+        body: JSON.stringify({ installationId: Number(installation) }),
+      }).then((response) =>
+        readJson(response, "The catalog could not be synchronized"),
+      );
+      setMessage(
+        result.registered
+          ? `Registered ${result.registered} service${result.registered === 1 ? "" : "s"}.`
+          : "Synchronization finished. No repository metadata was found yet.",
+      );
+      setSelectedGate(null);
+      await load();
+      onRefresh();
+    } catch (error) {
+      setMessage((error as Error).message);
+    } finally {
+      setWorking(false);
+    }
+  }
+
+  if (user?.role !== "admin" || state?.complete) return null;
+  if (!state)
+    return loadError ? (
+      <button className="setup-launcher setup-launcher-error" onClick={load}>
+        <Radar size={15} />
+        <span>Retry setup check</span>
+      </button>
+    ) : null;
+
+  const gate = gates[active];
+  return (
+    <>
+      {!open && (
+        <button className="setup-launcher" onClick={() => setOpen(true)}>
+          <Radar size={15} />
+          <span>Finish portal setup</span>
+          <b>
+            {completedGates}/{gates.length}
+          </b>
+        </button>
+      )}
+      {open && (
+        <div className="onboarding-wrap">
+          <div className="onboarding-scrim" />
+          <section
+            className="onboarding"
+            role="dialog"
+            aria-modal="true"
+            aria-labelledby="onboarding-title"
+          >
+            <button
+              className="onboarding-close"
+              aria-label="Close setup"
+              onClick={() => {
+                sessionStorage.setItem("northstar-onboarding-dismissed", "1");
+                setOpen(false);
+              }}
+            >
+              <X size={18} />
+            </button>
+            <header className="onboarding-head">
+              <div className="flight-mark">
+                <Radar size={24} />
+              </div>
+              <div>
+                <p className="eyebrow">FIRST-RUN SETUP</p>
+                <h1 id="onboarding-title">Bring Perongen online.</h1>
+                <p>
+                  Four live gates take you from deployment to the first scored
+                  repository.
+                </p>
+              </div>
+            </header>
+            <div className="flight-path" aria-label="Setup gates">
+              {gates.map((item, index) => {
+                const done = item.keys.every((key) => state.checks[key]);
+                const Icon = item.icon;
+                return (
+                  <button
+                    className={`${done ? "done" : ""} ${active === index ? "active" : ""}`}
+                    aria-current={active === index ? "step" : undefined}
+                    onClick={() => setSelectedGate(index)}
+                    key={item.id}
+                  >
+                    <span>{done ? <Check size={14} /> : <Icon size={14} />}</span>
+                    <small>Gate {index + 1}</small>
+                    <strong>{item.title}</strong>
+                  </button>
+                );
+              })}
+            </div>
+            <div className="gate-detail">
+              <div className="gate-copy">
+                <p className="eyebrow">GATE {active + 1}</p>
+                <h2>{gate.title}</h2>
+                <p>{gate.body}</p>
+                {gate.keys.map((key) => (
+                  <div
+                    className={`readiness-row ${state.checks[key] ? "ready" : "pending"}`}
+                    key={key}
+                  >
+                    {state.checks[key] ? (
+                      <Check size={15} />
+                    ) : (
+                      <Circle size={15} />
+                    )}
+                    <span>{checkLabel(key)}</span>
+                    <strong>
+                      {state.checks[key] ? "Ready" : "Needs attention"}
+                    </strong>
+                  </div>
+                ))}
+              </div>
+              <aside className="gate-action">
+                {active === 0 && <Foundation state={state} checkAgain={load} />}
+                {active === 1 && (
+                  <>
+                    <ShieldCheck size={28} />
+                    <h3>Catalog installation</h3>
+                    <p>
+                      Use the number at the end of the GitHub App installation
+                      URL. Perongen saves it to catalog configuration and runs
+                      the first synchronization.
+                    </p>
+                    <label className="gate-input-label" htmlFor="setup-installation">
+                      Installation ID
+                    </label>
+                    <input
+                      id="setup-installation"
+                      value={installation}
+                      onChange={(event) =>
+                        setInstallation(event.target.value.replace(/\D/g, ""))
+                      }
+                      inputMode="numeric"
+                      pattern="[0-9]*"
+                      placeholder="145753228"
+                    />
+                    <button
+                      className="primary"
+                      disabled={!validInstallation || working}
+                      onClick={() => synchronize(true)}
+                    >
+                      {working ? "Connecting…" : "Save and synchronize"}{" "}
+                      <ArrowRight size={14} />
+                    </button>
+                  </>
+                )}
+                {active === 2 && (
+                  <>
+                    <Radar size={28} />
+                    <h3>Register the first service</h3>
+                    <p>
+                      Synchronize repositories that already contain metadata,
+                      or let Application Intake prepare a reviewed onboarding
+                      pull request from repository evidence.
+                    </p>
+                    <div className="gate-action-stack">
+                      <button
+                        className="primary"
+                        onClick={() => {
+                          setOpen(false);
+                          onOpenIntake();
+                        }}
+                      >
+                        Open Application Intake <ArrowRight size={14} />
+                      </button>
+                      <button
+                        className="ghost-button"
+                        disabled={!validInstallation || working}
+                        onClick={() => synchronize(false)}
+                      >
+                        {working ? "Synchronizing…" : "Synchronize again"}
+                      </button>
+                    </div>
+                  </>
+                )}
+                {active === 3 && (
+                  <>
+                    <Sparkles size={28} />
+                    <h3>Make the standard yours</h3>
+                    <p>
+                      Perongen ships with metadata quality enabled. Review its
+                      checks, then add repository standards or publish a
+                      workflow when the team is ready.
+                    </p>
+                    <button
+                      className="primary"
+                      onClick={() => {
+                        setOpen(false);
+                        onOpenSettings();
+                      }}
+                    >
+                      Review scorecards <ArrowRight size={14} />
+                    </button>
+                  </>
+                )}
+                <a
+                  className="onboarding-doc-link"
+                  href={documentationUrl}
+                  target="_blank"
+                  rel="noopener noreferrer"
+                >
+                  Open setup documentation <ExternalLink size={12} />
+                </a>
+                {message && (
+                  <div className="onboarding-message" role="status">
+                    {message}
+                  </div>
+                )}
+              </aside>
+            </div>
+          </section>
+        </div>
+      )}
+    </>
+  );
+}
+
+function Foundation({
+  state,
+  checkAgain,
+}: {
+  state: SetupState;
+  checkAgain: () => void;
+}) {
+  const configBlocked = state.configSource.status !== "ready";
+  return (
+    <>
+      <GitBranch size={28} />
+      <h3>
+        {state.missingDeployment.length === 1
+          ? "One deployment setting is missing"
+          : state.missingDeployment.length
+            ? "Deployment settings are missing"
+            : configBlocked
+              ? "Configuration needs attention"
+              : "Deployment foundation is ready"}
+      </h3>
+      {state.missingDeployment.length ? (
+        <>
+          <p>Add these values to Perongen’s deployment environment:</p>
+          <ul className="deployment-missing-list">
+            {state.missingDeployment.map((name) => (
+              <li key={name}>
+                <code>{name}</code>
+              </li>
+            ))}
+          </ul>
+          {state.missingDeployment.includes("GITHUB_WEBHOOK_SECRET") && (
+            <p>
+              Use the same strong value in the deployment and the GitHub App’s
+              webhook settings.
+            </p>
+          )}
+        </>
+      ) : configBlocked ? (
+        <div className="configuration-diagnostic" role="alert">
+          <strong>Configuration status: {state.configSource.status}</strong>
+          <span>
+            {state.configSource.error ||
+              "Perongen has not applied a valid configuration revision yet."}
+          </span>
+        </div>
+      ) : (
+        <p>
+          Deployment settings are available and revision{" "}
+          <code>{state.configSource.appliedSha?.slice(0, 7)}</code> is active.
+        </p>
+      )}
+      <div className="webhook-address">
+        <small>GitHub App webhook URL</small>
+        <code>{state.webhookUrl}</code>
+      </div>
+      {!state.webhookUrlPublic && (
+        <p>
+          <strong>This localhost URL is not reachable by GitHub.</strong> Set{" "}
+          <code>PUBLIC_URL</code> to a public HTTPS tunnel or deployment URL.
+        </p>
+      )}
+      <p>
+        Subscribe the GitHub App to <strong>Push</strong>,{" "}
+        <strong>Pull request</strong>, and <strong>Workflow run</strong> events,
+        restart Perongen after environment changes, then check again.
+      </p>
+      <button className="ghost-button" onClick={checkAgain}>
+        Check again
+      </button>
+    </>
+  );
+}

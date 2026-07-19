@@ -1,32 +1,18 @@
 ---
 layout: home
-title: Documentation
+title: Perongen
 
 hero:
-  name: Perongen documentation
-  text: Keep your software estate in order.
-  tagline: Learn how to find services, understand ownership, improve standards, and operate a self-hosted developer portal backed by GitHub.
+  name: SELF-HOSTED · GITHUB-NATIVE
+  text: Know what shipped. Keep it inside the guardrails.
+  tagline: Perongen turns repositories into an owned software catalog, evidence-backed standards, and reviewable fixes—without moving the source of truth out of GitHub.
   actions:
     - theme: brand
-      text: Start with the portal
-      link: /getting-started/
+      text: See the product
+      link: /#tour
     - theme: alt
       text: Deploy Perongen
       link: /admin/deployment
-
-features:
-  - icon: MEMBER
-    title: Use the portal
-    details: Find services and teams, understand scorecards, and run approved self-service workflows.
-    link: /getting-started/
-  - icon: OWNER
-    title: Describe your software
-    details: Add concise service and team metadata to the repositories that remain the source of truth.
-    link: /reference/service-metadata
-  - icon: ADMIN
-    title: Operate with confidence
-    details: Configure identity, ingestion, standards, actions, access, and integration health from one control plane.
-    link: /admin/control-plane
 ---
 
-<PortalMap />
+<LaunchPage />

@@ -1,6 +1,8 @@
 # Perongen
 
-A self-hosted developer portal with a software catalog, ownership and dependency metadata, repository documentation, operational context, configurable standards, GitHub-native remediation, and workflow-backed self-service actions.
+A self-hosted, GitHub-native developer portal that turns repositories into an owned software catalog, evidence-backed standards, and reviewable fixes. It is designed for engineering teams whose repository count—including AI-built applications—has outgrown “just check GitHub.”
+
+[Product tour and documentation](https://blondieboi.github.io/northstar-developer-portal/) · [Deployment guide](https://blondieboi.github.io/northstar-developer-portal/admin/deployment) · [Architecture and security](https://blondieboi.github.io/northstar-developer-portal/architecture-security)
 
 ## Run locally
 
