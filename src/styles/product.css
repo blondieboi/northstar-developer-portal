@@ -4224,6 +4224,7 @@ button:disabled {
   height: 190px;
   display: grid;
   grid-template-columns: 30px minmax(0, 1fr) 110px;
+  grid-template-rows: minmax(0, 1fr);
   gap: 12px;
   align-items: stretch;
 }
@@ -4235,24 +4236,33 @@ button:disabled {
   color: var(--muted);
 }
 .history-chart svg {
+  display: block;
+  min-width: 0;
+  min-height: 0;
   width: 100%;
   height: 100%;
   overflow: visible;
 }
-.history-chart line {
+.history-chart .history-grid {
   stroke: var(--line);
   stroke-width: 0.5;
+  vector-effect: non-scaling-stroke;
 }
-.history-chart polyline {
+.history-chart .history-area {
+  fill: color-mix(in srgb, var(--blue) 6%, transparent);
+}
+.history-chart .history-line {
   fill: none;
   stroke: var(--blue);
   stroke-width: 2;
+  stroke-linecap: round;
+  stroke-linejoin: round;
   vector-effect: non-scaling-stroke;
 }
-.history-chart circle {
-  fill: var(--paper);
+.history-chart .history-marker {
   stroke: var(--blue);
-  stroke-width: 1;
+  stroke-width: 3;
+  stroke-linecap: square;
   vector-effect: non-scaling-stroke;
 }
 .history-current {
@@ -4262,16 +4272,17 @@ button:disabled {
   flex-direction: column;
   justify-content: center;
 }
-.history-current svg {
-  width: 16px;
-  height: 16px;
+.history-current-kicker {
   color: var(--blue);
+  font: 600 8px "DM Mono";
+  letter-spacing: 0.12em;
+  text-transform: uppercase;
 }
 .history-current strong {
   font: 500 34px Newsreader;
   margin-top: 5px;
 }
-.history-current span {
+.history-current-caption {
   font-size: 10px;
   color: var(--muted);
 }
@@ -4364,7 +4375,7 @@ button:disabled {
     border: 0;
     padding: 0;
     display: grid;
-    grid-template-columns: 18px auto 1fr;
+    grid-template-columns: 40px auto 1fr;
     gap: 7px;
     align-items: center;
   }
