@@ -102,8 +102,8 @@ export default defineConfig({
     },
     socialLinks: [{ icon: "github", link: repo }],
     footer: {
-      message: "Self-hosted. Repository-driven. Built for engineering teams.",
-      copyright: "Perongen developer portal",
+      message: "Source in GitHub. Context in Perongen. Changes through review.",
+      copyright: "Perongen developer portal documentation",
     },
     docFooter: { prev: "Previous guide", next: "Next guide" },
     notFound: {
