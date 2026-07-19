@@ -49,7 +49,7 @@ perongen/
 └── tools.yaml
 ```
 
-Set `NORTHSTAR_CONFIG_REPOSITORY`, `NORTHSTAR_CONFIG_BRANCH`, `NORTHSTAR_CONFIG_DIRECTORY`, and `NORTHSTAR_CONFIG_INSTALLATION_ID` to that location. Add at least one administrator to `access.yaml` or configure a break-glass login through `GITHUB_ADMIN_LOGINS`.
+Set `PERONGEN_CONFIG_REPOSITORY`, `PERONGEN_CONFIG_BRANCH`, `PERONGEN_CONFIG_DIRECTORY`, and `PERONGEN_CONFIG_INSTALLATION_ID` to that location. Add at least one administrator to `access.yaml` or configure a break-glass login through `GITHUB_ADMIN_LOGINS`.
 
 ## Configure the environment
 
@@ -59,10 +59,10 @@ The minimum production foundation is:
 
 ```dotenv
 DATABASE_URL=postgres://user:password@database:5432/perongen
-NORTHSTAR_CONFIG_REPOSITORY=your-org/portal-config
-NORTHSTAR_CONFIG_BRANCH=main
-NORTHSTAR_CONFIG_DIRECTORY=perongen
-NORTHSTAR_CONFIG_INSTALLATION_ID=12345678
+PERONGEN_CONFIG_REPOSITORY=your-org/portal-config
+PERONGEN_CONFIG_BRANCH=main
+PERONGEN_CONFIG_DIRECTORY=perongen
+PERONGEN_CONFIG_INSTALLATION_ID=12345678
 GITHUB_APP_ID=123456
 GITHUB_CLIENT_ID=Iv1.example
 GITHUB_CLIENT_SECRET=stored-in-your-secret-manager

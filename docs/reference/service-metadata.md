@@ -5,7 +5,7 @@ Place one service document at the configured path in each repository that should
 ## Complete example
 
 ```yaml
-apiVersion: northstar.dev/v1
+apiVersion: perongen.dev/v1
 kind: Service
 metadata:
   name: checkout-api
@@ -47,7 +47,7 @@ spec:
 
 | Field                  | Required | Notes                                                                          |
 | ---------------------- | -------- | ------------------------------------------------------------------------------ |
-| `apiVersion`           | Yes      | Accepted as a string; use `northstar.dev/v1`                                   |
+| `apiVersion`           | Yes      | Accepted as a string; use `perongen.dev/v1`                                   |
 | `kind`                 | Yes      | Must be `Service`                                                              |
 | `metadata.name`        | Yes      | Non-empty stable service identifier                                            |
 | `metadata.title`       | No       | Human-readable title used in the dossier                                       |

@@ -1,19 +1,19 @@
 # Portal configuration
 
-Canonical non-secret configuration consists of seven strict YAML documents. Each document contains `apiVersion: northstar.dev/v1` and exactly one named section.
+Canonical non-secret configuration consists of seven strict YAML documents. Each document contains `apiVersion: perongen.dev/v1` and exactly one named section.
 
 Unknown properties fail validation. Use the files in `config.example/` as the maintained starting point.
 
 ## General
 
 ```yaml
-apiVersion: northstar.dev/v1
+apiVersion: perongen.dev/v1
 general:
   name: Perongen
   logoUrl: ""
   accentColor: "#b07a32"
   supportUrl: ""
-  documentationUrl: https://blondieboi.github.io/northstar-developer-portal/
+  documentationUrl: https://blondieboi.github.io/perongen-developer-portal/
 ```
 
 URLs may be empty. `accentColor` must be a six-digit hexadecimal color.
@@ -21,7 +21,7 @@ URLs may be empty. `accentColor` must be a six-digit hexadecimal color.
 ## Catalog
 
 ```yaml
-apiVersion: northstar.dev/v1
+apiVersion: perongen.dev/v1
 catalog:
   serviceMetadataPath: .portal/service.yaml
   teamMetadataPath: .portal/team.yaml
@@ -63,7 +63,7 @@ The paths and lifecycle list must not be empty. Tier and service type IDs are un
 ## Access
 
 ```yaml
-apiVersion: northstar.dev/v1
+apiVersion: perongen.dev/v1
 access:
   admins:
     - your-github-login
@@ -72,7 +72,7 @@ access:
 ## Tools
 
 ```yaml
-apiVersion: northstar.dev/v1
+apiVersion: perongen.dev/v1
 tools:
   items:
     - id: github
@@ -93,7 +93,7 @@ These sections contain arrays under `cards` and `definitions`. Use [Scorecard ru
 ## Integrations
 
 ```yaml
-apiVersion: northstar.dev/v1
+apiVersion: perongen.dev/v1
 integrations:
   plugins:
     - id: github-actions

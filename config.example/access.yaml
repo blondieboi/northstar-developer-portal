@@ -1,4 +1,4 @@
-apiVersion: northstar.dev/v1
+apiVersion: perongen.dev/v1
 access:
   admins:
     - your-github-login

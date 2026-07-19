@@ -487,10 +487,10 @@ server.get("/api/onboarding", async () => {
     ),
     webhookSecret: Boolean(process.env.GITHUB_WEBHOOK_SECRET),
     configRepository: Boolean(
-      process.env.NORTHSTAR_CONFIG_REPOSITORY &&
-      process.env.NORTHSTAR_CONFIG_BRANCH &&
-      process.env.NORTHSTAR_CONFIG_DIRECTORY &&
-      process.env.NORTHSTAR_CONFIG_INSTALLATION_ID,
+      process.env.PERONGEN_CONFIG_REPOSITORY &&
+      process.env.PERONGEN_CONFIG_BRANCH &&
+      process.env.PERONGEN_CONFIG_DIRECTORY &&
+      process.env.PERONGEN_CONFIG_INSTALLATION_ID,
     ),
     configRevision: configSource.status === "ready",
     administrator: Number(stats.users) > 0,
@@ -515,7 +515,7 @@ server.get("/api/onboarding", async () => {
     GITHUB_APP_ID_and_private_key: checks.githubApp,
     GITHUB_OAuth: checks.oauth,
     GITHUB_WEBHOOK_SECRET: checks.webhookSecret,
-    NORTHSTAR_CONFIG_REPOSITORY_and_location: checks.configRepository,
+    PERONGEN_CONFIG_REPOSITORY_and_location: checks.configRepository,
   };
   return {
     checks,

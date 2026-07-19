@@ -28,7 +28,7 @@ type SetupState = {
 };
 
 const setupGuide =
-  "https://blondieboi.github.io/northstar-developer-portal/admin/deployment";
+  "https://blondieboi.github.io/perongen-developer-portal/admin/deployment";
 
 const gates = [
   {
@@ -137,7 +137,7 @@ export function OnboardingGate({
       if (
         user?.role === "admin" &&
         !typedState.complete &&
-        !sessionStorage.getItem("northstar-onboarding-dismissed")
+        !sessionStorage.getItem("perongen-onboarding-dismissed")
       )
         setOpen(true);
     } catch (error) {
@@ -244,7 +244,7 @@ export function OnboardingGate({
               className="onboarding-close"
               aria-label="Close setup"
               onClick={() => {
-                sessionStorage.setItem("northstar-onboarding-dismissed", "1");
+                sessionStorage.setItem("perongen-onboarding-dismissed", "1");
                 setOpen(false);
               }}
             >

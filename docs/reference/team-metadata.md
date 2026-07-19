@@ -5,7 +5,7 @@ Place a team document at the configured team metadata path in a repository visib
 ## Complete example
 
 ```yaml
-apiVersion: northstar.dev/v1
+apiVersion: perongen.dev/v1
 kind: Team
 metadata:
   name: platform
@@ -26,7 +26,7 @@ spec:
 
 | Field | Required | Notes |
 | --- | --- | --- |
-| `apiVersion` | Yes | Accepted as a string; use `northstar.dev/v1` |
+| `apiVersion` | Yes | Accepted as a string; use `perongen.dev/v1` |
 | `kind` | Yes | Must be `Team` |
 | `metadata.name` | Yes | Non-empty key used by service ownership |
 | `metadata.title` | Yes | Human-readable team name |

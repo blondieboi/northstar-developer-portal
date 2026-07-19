@@ -2,7 +2,7 @@
 
 A self-hosted, GitHub-native developer portal that turns repositories into an owned software catalog, evidence-backed standards, and reviewable fixes. It is designed for engineering teams whose repository count—including AI-built applications—has outgrown “just check GitHub.”
 
-[Product tour and documentation](https://blondieboi.github.io/northstar-developer-portal/) · [Deployment guide](https://blondieboi.github.io/northstar-developer-portal/admin/deployment) · [Architecture and security](https://blondieboi.github.io/northstar-developer-portal/architecture-security)
+[Product tour and documentation](https://blondieboi.github.io/perongen-developer-portal/) · [Deployment guide](https://blondieboi.github.io/perongen-developer-portal/admin/deployment) · [Architecture and security](https://blondieboi.github.io/perongen-developer-portal/architecture-security)
 
 ## Run locally
 
@@ -27,7 +27,7 @@ Perongen never substitutes demo entities for missing data. Without a database or
 
 ## Configuration and administration
 
-Perongen reads its canonical non-secret configuration from seven validated YAML files in a GitHub repository. Configure the repository, branch, directory, and GitHub App installation with `NORTHSTAR_CONFIG_REPOSITORY`, `NORTHSTAR_CONFIG_BRANCH`, `NORTHSTAR_CONFIG_DIRECTORY`, and `NORTHSTAR_CONFIG_INSTALLATION_ID`. See `config.example/` for the file contract. Older repositories without `integrations.yaml` continue to load; the first integration save creates it.
+Perongen reads its canonical non-secret configuration from seven validated YAML files in a GitHub repository. Configure the repository, branch, directory, and GitHub App installation with `PERONGEN_CONFIG_REPOSITORY`, `PERONGEN_CONFIG_BRANCH`, `PERONGEN_CONFIG_DIRECTORY`, and `PERONGEN_CONFIG_INSTALLATION_ID`. See `config.example/` for the file contract. Older repositories without `integrations.yaml` continue to load; the first integration save creates it.
 
 Administrators edit configuration through **Settings** without writing YAML. Each draft is validated and previews the YAML files and line counts that will change. Saves use optimistic blob-SHA conflict protection, and related multi-file updates are committed atomically. Valid external commits are applied through Push webhooks; a 60-second server poll recovers missed deliveries, and open browsers check the applied revision every 15 seconds. PostgreSQL stores the last-known-good revision so reads remain available during GitHub outages, while writes are disabled until synchronization recovers.
 
@@ -55,12 +55,12 @@ To migrate an existing file/database-backed deployment, export its current effec
 npm run config:export -- --output ./perongen-config
 ```
 
-The exporter includes current database administrators, validates every file, and refuses to overwrite existing output unless `--force` is supplied. `NORTHSTAR_CONFIG_PATH` and the legacy override tables are retained only for this migration path.
+The exporter includes current database administrators, validates every file, and refuses to overwrite existing output unless `--force` is supplied. `PERONGEN_CONFIG_PATH` and the legacy override tables are retained only for this migration path.
 
 Repository metadata is read from `.portal/service.yaml`:
 
 ```yaml
-apiVersion: northstar.dev/v1
+apiVersion: perongen.dev/v1
 kind: Service
 metadata:
   name: checkout-api
@@ -97,7 +97,7 @@ spec:
 Team membership is read from `.portal/team.yaml` in an installed catalog repository:
 
 ```yaml
-apiVersion: northstar.dev/v1
+apiVersion: perongen.dev/v1
 kind: Team
 metadata:
   name: platform

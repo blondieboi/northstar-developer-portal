@@ -18,7 +18,7 @@ An ownership value uses the form `team:<name>`, for example `team:platform`. The
 Team membership comes from `.portal/team.yaml`. Perongen resolves listed usernames against GitHub and records their current profile details.
 
 ```yaml
-apiVersion: northstar.dev/v1
+apiVersion: perongen.dev/v1
 kind: Team
 metadata:
   name: platform

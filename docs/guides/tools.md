@@ -16,4 +16,4 @@ Open **Tools**, find the shared system, and choose the destination label that ma
 
 Administrators manage tools under **Settings → Tools**. Every tool requires at least one destination with a valid URL. Leaving the icon URL empty makes Perongen use a generated monogram consistent with the portal identity.
 
-Tool configuration can also be provided in `northstar.yaml`; a saved control-plane override takes precedence until the section is reset.
+Tool configuration can also be provided in `perongen.yaml`; a saved control-plane override takes precedence until the section is reset.

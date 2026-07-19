@@ -2,15 +2,15 @@ services:
   postgres:
     image: postgres:17-alpine
     environment:
-      POSTGRES_USER: northstar
-      POSTGRES_PASSWORD: northstar
-      POSTGRES_DB: northstar
+      POSTGRES_USER: perongen
+      POSTGRES_PASSWORD: perongen
+      POSTGRES_DB: perongen
     ports: ["${POSTGRES_PORT:-5440}:5432"]
-    volumes: ["northstar-data:/var/lib/postgresql/data"]
+    volumes: ["perongen-data:/var/lib/postgresql/data"]
     healthcheck:
-      test: ["CMD-SHELL", "pg_isready -U northstar"]
+      test: ["CMD-SHELL", "pg_isready -U perongen"]
       interval: 5s
       timeout: 5s
       retries: 10
 volumes:
-  northstar-data:
+  perongen-data:

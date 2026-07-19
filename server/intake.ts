@@ -292,7 +292,7 @@ export function intakeMetadata(input: unknown) {
   if (!draft.exposure || !draft.dataSensitivity || !draft.authentication)
     throw new Error("Confirm exposure, data sensitivity, and authentication before onboarding");
   const metadata: any = {
-    apiVersion: "northstar.dev/v1",
+    apiVersion: "perongen.dev/v1",
     kind: "Service",
     metadata: {
       name: slug(draft.name),

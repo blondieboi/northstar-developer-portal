@@ -18,12 +18,12 @@ Environment variables contain deployment location, credentials, and bootstrap va
 
 | Variable | Required | Purpose |
 | --- | --- | --- |
-| `NORTHSTAR_CONFIG_REPOSITORY` | Yes | GitHub `owner/repository` containing configuration |
-| `NORTHSTAR_CONFIG_BRANCH` | Yes | Configuration branch |
-| `NORTHSTAR_CONFIG_DIRECTORY` | Yes | Directory containing the seven YAML files; legacy installations may initially omit `integrations.yaml` |
-| `NORTHSTAR_CONFIG_INSTALLATION_ID` | Yes | GitHub App installation with configuration repository access |
-| `NORTHSTAR_CONFIG_POLL_INTERVAL_SECONDS` | No | Recovery poll interval; defaults to `60` |
-| `NORTHSTAR_CONFIG_PATH` | Migration only | Legacy file read by `config:export` |
+| `PERONGEN_CONFIG_REPOSITORY` | Yes | GitHub `owner/repository` containing configuration |
+| `PERONGEN_CONFIG_BRANCH` | Yes | Configuration branch |
+| `PERONGEN_CONFIG_DIRECTORY` | Yes | Directory containing the seven YAML files; legacy installations may initially omit `integrations.yaml` |
+| `PERONGEN_CONFIG_INSTALLATION_ID` | Yes | GitHub App installation with configuration repository access |
+| `PERONGEN_CONFIG_POLL_INTERVAL_SECONDS` | No | Recovery poll interval; defaults to `60` |
+| `PERONGEN_CONFIG_PATH` | Migration only | Legacy file read by `config:export` |
 
 ## GitHub App and OAuth
 
@@ -42,12 +42,12 @@ Environment variables contain deployment location, credentials, and bootstrap va
 
 ```dotenv
 PORT=4000
-DATABASE_URL=postgres://northstar:northstar@localhost:5440/northstar
-NORTHSTAR_CONFIG_REPOSITORY=your-org/portal-config
-NORTHSTAR_CONFIG_BRANCH=main
-NORTHSTAR_CONFIG_DIRECTORY=perongen
-NORTHSTAR_CONFIG_INSTALLATION_ID=12345678
-NORTHSTAR_CONFIG_POLL_INTERVAL_SECONDS=60
+DATABASE_URL=postgres://perongen:perongen@localhost:5440/perongen
+PERONGEN_CONFIG_REPOSITORY=your-org/portal-config
+PERONGEN_CONFIG_BRANCH=main
+PERONGEN_CONFIG_DIRECTORY=perongen
+PERONGEN_CONFIG_INSTALLATION_ID=12345678
+PERONGEN_CONFIG_POLL_INTERVAL_SECONDS=60
 GITHUB_APP_ID=123456
 GITHUB_CLIENT_ID=Iv1.example
 GITHUB_CLIENT_SECRET=replace-me

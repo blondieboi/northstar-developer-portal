@@ -8,7 +8,7 @@ vi.mock("./github-app.js", () => ({
 import { openMetadataPullRequest } from "./platform.js";
 
 const encoded = Buffer.from(
-  `apiVersion: northstar.dev/v1
+  `apiVersion: perongen.dev/v1
 kind: Service
 metadata:
   name: checkout

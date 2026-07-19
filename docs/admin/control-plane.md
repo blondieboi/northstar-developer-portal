@@ -40,7 +40,7 @@ Resetting a section commits the application's built-in default for that section.
 Set `general.documentationUrl` to the public documentation root:
 
 ```yaml
-documentationUrl: https://blondieboi.github.io/northstar-developer-portal/
+documentationUrl: https://blondieboi.github.io/perongen-developer-portal/
 ```
 
 Self-hosted or forked installations should replace this with their maintained documentation URL. The portal hides its documentation actions when the value is empty.
